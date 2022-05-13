@@ -9,27 +9,27 @@ import java.lang.annotation.Target;
  * A single configuration option.
  * @param <T> The type of the option.
  */
-public class Option<T> {
+public class Option<T> { // TODO: Names, descriptions, etc.
 
-	public T value;
+    public T value;
 
-	public Option(T value) {
-		this.value = value;
-	}
+    public Option(T value) {
+        this.value = value;
+    }
 
-	/**
-	 * Used to denote that an option cannot be obtained reflectively (internal to the framework).
-	 */
-	@Target(ElementType.FIELD)
-	@Retention(RetentionPolicy.RUNTIME)
-	public @interface Ungettable {
-	}
+    /**
+     * Used to denote that an option cannot be obtained reflectively (internal to the framework).
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface Ungettable {
+    }
 
-	/**
-	 * Used to denote that an option is not intended to be set by the user.
-	 */
-	@Target(ElementType.FIELD)
-	@Retention(RetentionPolicy.RUNTIME)
-	public @interface Unsettable {
-	}
+    /**
+     * Used to denote that an option is not intended to be set by the user.
+     */
+    @Target(ElementType.FIELD)
+    @Retention(RetentionPolicy.RUNTIME)
+    public @interface Unsettable {
+    }
 }

@@ -35,6 +35,8 @@ public class Emitters {
 
     /* ------------------------------ Players ------------------------------ */
 
+    // FIXME: Maybe these emitters are a bit too general, it should probably be on a per-server basis right?
+
     /**
      * Fired when one of our players joins the server.
      */
@@ -47,6 +49,23 @@ public class Emitters {
 
     public static final Emitter<PlayerPacket> ON_PACKET_IN = new Emitter<>(PlayerPacket.class);
     public static final Emitter<PlayerPacket> ON_PACKET_OUT = new Emitter<>(PlayerPacket.class);
+
+    /* ------------------------------ Reporting ------------------------------ */
+
+    /**
+     * Extreme tickrate changes.
+     */
+    public static final Emitter<Player> REPORT_EXTREME_TPS = new Emitter<>(Player.class);
+
+    /**
+     * High TSLP.
+     */
+    public static final Emitter<Player> REPORT_HIGH_TSLP = new Emitter<>(Player.class);
+
+    /**
+     * High packet loss rates.
+     */
+    public static final Emitter<Player> REPORT_HIGH_PACKET_LOSS = new Emitter<>(Player.class);
 
     /* ------------------------------ Evil workaround / classes ------------------------------ */
 

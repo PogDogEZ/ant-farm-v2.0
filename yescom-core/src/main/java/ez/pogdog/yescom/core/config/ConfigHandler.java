@@ -5,9 +5,9 @@ package ez.pogdog.yescom.core.config;
  */
 public class ConfigHandler {
 
-	private final String configDirectory;
+    private final String configDirectory;
 
-	public ConfigHandler(String configDirectory) {
-		this.configDirectory = configDirectory;
-	}
+    public ConfigHandler(String configDirectory) {
+        this.configDirectory = configDirectory;
+    }
 }

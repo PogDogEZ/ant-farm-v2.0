@@ -2,33 +2,58 @@ package ez.pogdog.yescom.core.query.invalidmove;
 
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.data.ChunkPosition;
-import ez.pogdog.yescom.core.query.IQueryHandle;
+import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.query.IsLoadedQuery;
 
-public class InvalidMoveQuery extends IsLoadedQuery {
+public class InvalidMoveQuery extends IsLoadedQuery<InvalidMoveHandle> {
 
-	private final YesCom yesCom = YesCom.getInstance();
+    // TODO: Priority, expected loaded/unloaded, etc...
 
-	private final ChunkPosition chunkPosition;
+    private final YesCom yesCom = YesCom.getInstance();
 
-	private State state; // State callback
+    private final ChunkPosition chunkPosition;
+    private final Dimension dimension;
 
-	public InvalidMoveQuery(ChunkPosition chunkPosition) {
-		this.chunkPosition = chunkPosition;
-	}
+    private State state; // State callback
 
-	@Override
-	public IQueryHandle<InvalidMoveQuery> getHandle() {
-		return yesCom.invalidMoveHandle;
-	}
+    public InvalidMoveQuery(ChunkPosition chunkPosition, Dimension dimension, State expected, Priority priority) {
+        super(expected, priority);
 
-	@Override
-	public ChunkPosition getPosition() {
-		return chunkPosition;
-	}
+        this.chunkPosition = chunkPosition;
+        this.dimension = dimension;
 
-	@Override
-	public State getState() {
-		return state;
-	}
+        state = State.WAITING;
+    }
+
+    @Override
+    public void dispatch(InvalidMoveHandle handle) {
+        state = State.WAITING;
+    }
+
+    @Override
+    public void tick(InvalidMoveHandle handle) {
+        // state = State.WAITING;
+    }
+
+    @Override
+    public ChunkPosition getPosition() {
+        return chunkPosition;
+    }
+
+    @Override
+    public Dimension getDimension() {
+        return dimension;
+    }
+
+    @Override
+    public State getState() {
+        return state;
+    }
+
+    /**
+     * Sets the state of this query. ONLY FOR USE WITH {@link InvalidMoveHandle}.
+     */
+    public void setState(State state) { // TODO: Package private
+        this.state = state;
+    }
 }

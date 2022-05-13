@@ -129,7 +129,6 @@ public class YesCom extends Thread implements IConfig {
 
     public final AccountHandler accountHandler;
     public final ConfigHandler configHandler;
-    public final InvalidMoveHandle invalidMoveHandle;
 
     // public final Interpreter python;
 
@@ -143,7 +142,6 @@ public class YesCom extends Thread implements IConfig {
         // servers.add(new Server("constantiam.net", 25565)); // :p
         accountHandler = new AccountHandler(accountsFile);
         configHandler = new ConfigHandler(configDirectory);
-        invalidMoveHandle = new InvalidMoveHandle();
 
         /*
         logger.fine("Bootstrapping jep...");
@@ -170,7 +168,6 @@ public class YesCom extends Thread implements IConfig {
             Emitters.ON_PRE_TICK.emit();
 
             for (Server server : servers) server.tick();
-            invalidMoveHandle.tick();
 
             Emitters.ON_POST_TICK.emit();
         }
