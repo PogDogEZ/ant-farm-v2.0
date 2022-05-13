@@ -1,0 +1,43 @@
+apply plugin: "java"
+
+sourceSets {
+    main {
+        java {
+            srcDir "src/main/python" // >:)
+        }
+    }
+}
+
+repositories {
+    maven {
+        name = "jitpack"
+        url = "https://jitpack.io/"
+    }
+    mavenCentral()
+}
+
+dependencies {
+    compile project(":yescom:api")
+
+    compile group: "commons-cli", name: "commons-cli", version: "1.4"
+
+    compile group: "black.ninia", name: "jep", version: "4.0.3"
+    compile group: "com.github.Steveice10", name: "MCProtocolLib", version: "1.12.2-2"
+}
+
+jar {
+    manifest {
+        attributes("Main-Class": "ez.pogdog.yescom.YesCom")
+    }
+
+    // TODO: Actually, we're gonna have to run setup.py and THEN copy the files into the jar
+    from sourceSets.main.java.srcDirs.collect { // >:) x2
+        it.toString().contains("python") ? it : null
+    }
+    from configurations.compile.collect {
+        it.isDirectory() ? it : zipTree(it)
+    }
+    
+    baseName = "yescom"
+    classifier = "core"
+}

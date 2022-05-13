@@ -1,0 +1,35 @@
+apply plugin: "java"
+
+sourceSets {
+    main {
+        java {
+            srcDir "src/main/python"
+        }
+    }
+}
+
+repositories {
+    maven {
+        name = "jitpack"
+        url = "https://jitpack.io/"
+    }
+    mavenCentral()
+}
+
+dependencies {
+    compile project(":yescom:core")
+}
+
+jar {
+    manifest {
+        attributes("Main-Class": "ez.pogdog.yescom.ui.Main")
+    }
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    from sourceSets.main.java.srcDirs.collect {
+        it.toString().contains("python") ? it : null
+    }
+    from configurations.compile.collect {
+        it.isDirectory() ? it : zipTree(it)
+    }
+}

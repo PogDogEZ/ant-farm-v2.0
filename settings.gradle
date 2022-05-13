@@ -1,0 +1,8 @@
+rootProject.name = "yescom"
+
+include ":yescom:api", ":yescom:core", ":yescom:ui"
+
+project(":yescom:api").projectDir = file("./yescom-api")
+project(":yescom:core").projectDir = file("./yescom-core")
+project(":yescom:ui").projectDir = file("./yescom-ui")
+

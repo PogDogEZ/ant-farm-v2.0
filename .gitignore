@@ -1,0 +1,7 @@
+.gradle/
+build/
+
+yescom-api/build/
+yescom-core/build/
+yescom-ui/build/
+
