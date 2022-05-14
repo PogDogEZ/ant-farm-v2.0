@@ -6,6 +6,7 @@ import com.github.steveice10.mc.protocol.data.game.PlayerListEntry;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionRotationPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerRotationPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.client.world.ClientTeleportConfirmPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.ServerChatPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.ServerJoinGamePacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.ServerPlayerListEntryPacket;
@@ -20,6 +21,7 @@ import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerUpdate
 import com.github.steveice10.packetlib.Client;
 import com.github.steveice10.packetlib.Session;
 import com.github.steveice10.packetlib.event.session.*;
+import com.github.steveice10.packetlib.packet.Packet;
 import com.github.steveice10.packetlib.tcp.TcpClientSession;
 import com.github.steveice10.packetlib.tcp.TcpSessionFactory;
 import ez.pogdog.yescom.api.Logging;
@@ -28,6 +30,8 @@ import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.api.data.Position;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.account.IAccount;
+import ez.pogdog.yescom.core.report.connection.ExtremeTPSReport;
+import ez.pogdog.yescom.core.util.Chat;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -173,6 +177,13 @@ public class Player {
         if (isConnected()) session.disconnect(reason);
     }
 
+    /**
+     * Sends a packet to the server, duh.
+     */
+    public void send(Packet packet) {
+        if (session != null && session.isConnected()) session.send(packet);
+    }
+
     /* ------------------------------ Setters and getters ------------------------------ */
 
     public IAccount getAccount() {
@@ -314,7 +325,8 @@ public class Player {
                 lastPacketTime = System.currentTimeMillis();
             } else {
                 // For checking that this actually works lol
-                logger.finest(String.format("Chat from %s: %s", getUsername(), ((ServerChatPacket)event.getPacket()).getMessage().getFullText()));
+                logger.finest(String.format("%s: %s", getUsername(), /* server.hostname, server.port, */
+                        Chat.unwrap(((ServerChatPacket)event.getPacket()).getMessage(), true)));
             }
 
             synchronized (Player.this) {
@@ -327,12 +339,14 @@ public class Player {
                     angle.setYaw(packet.getYaw());
                     angle.setPitch(packet.getPitch());
 
-                    if (currentTeleportID < 0)
+                    if (currentTeleportID < 0) {
                         logger.finer(String.format("%s logged in at xyz: %.1f, %.1f, %.1f dim: %s.", getUsername(),
                                 position.getX(), position.getY(), position.getZ(), dimension));
-                    currentTeleportID = packet.getTeleportId();
 
-                    // We won't send the confirm teleport here, this class only manages internal states
+                        // We will confirm the first teleport, but subsequent ones are handled elsewhere
+                        session.send(new ClientTeleportConfirmPacket(packet.getTeleportId()));
+                    }
+                    currentTeleportID = packet.getTeleportId();
 
                 } else if (event.getPacket() instanceof ServerPlayerHealthPacket) {
                     ServerPlayerHealthPacket packet = event.getPacket();
@@ -365,11 +379,8 @@ public class Player {
                         lastWorldTicks = packet.getWorldAge();
                     } else {
                         float delta = (packet.getWorldAge() - lastWorldTicks) / ((System.currentTimeMillis() - lastTimeUpdate) / 1000.0f);
-                        // FIXME: Better reporting system
-                        /*
                         if (serverTPS != 0.0f && Math.abs(delta - serverTPS) > server.EXTREME_TPS_CHANGE.value)
-                            Emitters.REPORT_EXTREME_TPS.emit(Player.this); // TODO: Include delta?
-                         */
+                            Emitters.ON_REPORT.emit(new ExtremeTPSReport(Player.this, delta));
 
                         tickValues.add(delta);
                         while (tickValues.size() > 5) tickValues.remove(0);
@@ -404,7 +415,7 @@ public class Player {
 
         @Override
         public void connected(ConnectedEvent event) {
-            logger.info(String.format("%s was successfully connected.", getUsername()));
+            logger.info(String.format("%s was successfully connected to %s:%d.", getUsername(), server.hostname, server.port));
             Emitters.ON_LOGIN.emit(Player.this);
         }
 
@@ -417,6 +428,14 @@ public class Player {
 
             logger.info(String.format("%s was disconnected for: %s", getUsername(), event.getReason()));
             Emitters.ON_LOGOUT.emit(new Emitters.PlayerLogout(Player.this, event.getReason()));
+
+            currentTeleportID = -1;
+            currentWindowID = -1;
+
+            tickValues.clear();
+
+            positionDirty = false;
+            angleDirty = false;
 
             serverPing = 0;
             serverTPS = 0.0f;

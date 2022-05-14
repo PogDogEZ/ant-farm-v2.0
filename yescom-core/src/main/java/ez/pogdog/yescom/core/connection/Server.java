@@ -12,6 +12,7 @@ import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 /**
@@ -23,6 +24,9 @@ public class Server implements IConfig {
     private final YesCom yesCom = YesCom.getInstance();
 
     /* ------------------------------ Options ------------------------------ */
+
+    public final Option<Boolean> DIGGING_ENABLED = new Option<>(true);
+    public final Option<Boolean> INVALID_MOVE_ENABLED = new Option<>(true);
 
     /**
      * Global login time, in milliseconds. All players are restricted to this.
@@ -123,9 +127,9 @@ public class Server implements IConfig {
      * Dispatches a query to this server.
      */
     @SuppressWarnings({ "rawtypes", "unchecked" })
-    public void dispatch(IQuery<?> query) {
+    public void dispatch(IQuery<?> query, Consumer<IQuery<?>> callback) {
         for (IQueryHandle handle : handles) {
-            if (handle.handles(query)) handle.dispatch(query);
+            if (handle.handles(query)) handle.dispatch(query, callback);
         }
     }
 

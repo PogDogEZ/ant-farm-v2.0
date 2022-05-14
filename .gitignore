@@ -5,3 +5,6 @@ yescom-api/build/
 yescom-core/build/
 yescom-ui/build/
 
+accounts.txt
+config/
+

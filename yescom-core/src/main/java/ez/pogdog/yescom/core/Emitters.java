@@ -5,6 +5,7 @@ import ez.pogdog.yescom.api.event.Emitter;
 import ez.pogdog.yescom.api.util.Pair;
 import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.connection.Player;
+import ez.pogdog.yescom.core.report.IReport;
 
 /**
  * Global {@link Emitter}s for YesCom.
@@ -53,19 +54,10 @@ public class Emitters {
     /* ------------------------------ Reporting ------------------------------ */
 
     /**
-     * Extreme tickrate changes.
+     * Fired when a report is created.
      */
-    public static final Emitter<Player> REPORT_EXTREME_TPS = new Emitter<>(Player.class);
-
-    /**
-     * High TSLP.
-     */
-    public static final Emitter<Player> REPORT_HIGH_TSLP = new Emitter<>(Player.class);
-
-    /**
-     * High packet loss rates.
-     */
-    public static final Emitter<Player> REPORT_HIGH_PACKET_LOSS = new Emitter<>(Player.class);
+    @SuppressWarnings("rawtypes")
+    public static final Emitter<IReport> ON_REPORT = new Emitter<>(IReport.class);
 
     /* ------------------------------ Evil workaround / classes ------------------------------ */
 

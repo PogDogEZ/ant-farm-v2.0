@@ -16,6 +16,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 /**
@@ -34,6 +35,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     /* ------------------------------ Other fields ------------------------------ */
 
     private final Map<Player, PlayerHandle> available = new HashMap<>();
+    private final Map<InvalidMoveQuery, Consumer<InvalidMoveQuery>> callbacks = new HashMap<>();
 
     public final Server server;
 
@@ -57,12 +59,14 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
     @Override
     public boolean handles(IQuery<?> query) {
-        return query instanceof InvalidMoveQuery;
+        return query instanceof InvalidMoveQuery && server.INVALID_MOVE_ENABLED.value;
     }
 
     @Override
-    public void dispatch(InvalidMoveQuery query) {
+    public void dispatch(InvalidMoveQuery query, Consumer<InvalidMoveQuery> callback) {
+        callbacks.put(query, callback);
         // TODO: Dispatching queries
+        // TODO: Priority, expected loaded/unloaded, etc...
     }
 
     @Override
@@ -125,8 +129,11 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             logger.finer(String.format("Unregistered invalid move handle for player %s.", player.getUsername()));
 
             logger.finer(String.format("Rescheduling %d queries.", queryMap.size()));
-            for (InvalidMoveQuery query : queryMap.values()) InvalidMoveHandle.this.dispatch(query);
+            for (InvalidMoveQuery query : queryMap.values()) dispatch(query, callbacks.get(query));
+
+            confirmedStorages.clear(); // Free memory early
             queryMap.clear();
+            windowToTPIDMap.clear();
         }
 
         /* ------------------------------ Public API ------------------------------ */
@@ -135,7 +142,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
          * @return Can this player dispatch queries?
          */
         public boolean canQuery() { // TODO: Take into account current query map size, etc...
-            return bestStorage != null;
+            return bestStorage != null && player.getCurrentTeleportID() >= 0;
         }
     }
 }

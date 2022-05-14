@@ -31,8 +31,10 @@ public class Mojang implements IAccount {
 
     @Override
     public void login(AuthenticationService authService) throws RequestException {
-        authService.setUsername(email);
-        authService.setPassword(password);
+        if (authService.getUsername() == null) {
+            authService.setUsername(email);
+            authService.setPassword(password);
+        }
         authService.login();
     }
 }
