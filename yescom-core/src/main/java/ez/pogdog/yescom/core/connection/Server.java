@@ -62,6 +62,10 @@ public class Server implements IConfig {
     private float tslp;
     private float ping;
 
+    private float queriesPerSecond;
+    private int waitingSize;
+    private int processingSize;
+
     private long lastLoginTime;
 
     public Server(String hostname, int port) {
@@ -79,6 +83,12 @@ public class Server implements IConfig {
         logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));
 
         handles.add(new InvalidMoveHandle(this));
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Server(host=%s, port=%d, players=%d, tps=%.1f, ping=%.1f, qps=%.1f)", hostname, port,
+                players.size(), tickrate, ping, queriesPerSecond);
     }
 
     /* ------------------------------ Events ------------------------------ */
@@ -118,7 +128,19 @@ public class Server implements IConfig {
             ping /= players.size();
         }
 
-        for (IQueryHandle<?> handle : handles) handle.tick();
+        queriesPerSecond = 0.0f;
+        waitingSize = 0;
+        processingSize = 0;
+        // TODO: Calculate loss rates too
+
+        for (IQueryHandle<?> handle : handles) {
+            handle.tick();
+            queriesPerSecond += handle.getQPS();
+            waitingSize += handle.getWaitingSize();
+            processingSize += handle.getProcessingSize();
+        }
+
+        if (!handles.isEmpty()) queriesPerSecond /= handles.size();
     }
 
     /* ------------------------------ Public API ------------------------------ */
@@ -159,15 +181,45 @@ public class Server implements IConfig {
 
     /* ------------------------------ Setters and getters ------------------------------ */
 
+    /**
+     * @return The current server tickrate.
+     */
     public float getTickrate() {
         return tickrate;
     }
 
+    /**
+     * @return The TSLP for all players connected to this server.
+     */
     public float getTSLP() {
         return tslp;
     }
 
+    /**
+     * @return The average ping of all players connected to this server.
+     */
     public float getPing() {
         return ping;
+    }
+
+    /**
+     * @return The cumulative queries per second of all handles for this server.
+     */
+    public float getQPS() {
+        return queriesPerSecond;
+    }
+
+    /**
+     * @return The number of queries waiting to be processed across all handles.
+     */
+    public int getWaitingSize() {
+        return waitingSize;
+    }
+
+    /**
+     * @return The number of queries currently being processed across all handles.
+     */
+    public int getProcessingSize() {
+        return processingSize;
     }
 }

@@ -160,16 +160,21 @@ public class YesCom extends Thread implements IConfig {
     public void run() {
         running = true;
         while (running) {
-            try {
-                Thread.sleep(50); // TODO: Adjust this based on how long a tick takes
-            } catch (InterruptedException ignored) {
-            }
+            long start = System.currentTimeMillis();
 
             Emitters.ON_PRE_TICK.emit();
-
             for (Server server : servers) server.tick();
-
             Emitters.ON_POST_TICK.emit();
+
+            long elapsed = System.currentTimeMillis() - start;
+            if (elapsed < 50) {
+                try {
+                    Thread.sleep(50 - elapsed);
+                } catch (InterruptedException ignored) {
+                }
+            } else if (elapsed > 1000) {
+                logger.warning(String.format("Tick took %dms!", elapsed));
+            }
         }
     }
 

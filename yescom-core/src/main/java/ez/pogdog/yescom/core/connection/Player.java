@@ -13,10 +13,9 @@ import com.github.steveice10.mc.protocol.packet.ingame.server.ServerPlayerListEn
 import com.github.steveice10.mc.protocol.packet.ingame.server.ServerRespawnPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.entity.player.ServerPlayerHealthPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.entity.player.ServerPlayerPositionRotationPacket;
-import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerCloseWindowPacket;
-import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerOpenWindowPacket;
-import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerWindowItemsPacket;
-import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerWindowPropertyPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.server.window.*;
+import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerChunkDataPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerUnloadChunkPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerUpdateTimePacket;
 import com.github.steveice10.packetlib.Client;
 import com.github.steveice10.packetlib.Session;
@@ -26,6 +25,7 @@ import com.github.steveice10.packetlib.tcp.TcpClientSession;
 import com.github.steveice10.packetlib.tcp.TcpSessionFactory;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.Angle;
+import ez.pogdog.yescom.api.data.ChunkPosition;
 import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.api.data.Position;
 import ez.pogdog.yescom.core.Emitters;
@@ -53,6 +53,8 @@ public class Player {
 
     /* ------------------------------ Player "stats" ------------------------------ */
 
+    public final List<ChunkPosition> loadedChunks = new ArrayList<>();
+
     private final Position position = new Position(0.0, 0.0, 0.0);
     private final Angle angle = new Angle(0.0f, 0.0f);
     private boolean onGround = true;
@@ -60,7 +62,7 @@ public class Player {
     private int currentTeleportID = -1;
     private int currentWindowID = -1;
 
-    private Dimension dimension = Dimension.OVERWORLD;
+    private Dimension dimension = null;
 
     private float health = 20.0f;
     private int hunger = 20;
@@ -164,6 +166,7 @@ public class Player {
                 logger.warning(String.format("Failed to connect %s to %s:%d: %s", getUsername(), server.hostname, server.port, error.getMessage()));
                 logger.throwing(getClass().getSimpleName(), "connect", error);
 
+                // TODO: Autoreconnect time, don't increment timer if server is actually down
                 lastLoginTime += server.PLAYER_LOGIN_TIME.value * (long)failedConnections++; // Don't spam connection attempts
             }
         }
@@ -195,6 +198,13 @@ public class Player {
      */
     public boolean isConnected() {
         return session != null && session.isConnected();
+    }
+
+    /**
+     * @return Has this player properly spawned into the server?
+     */
+    public boolean isSpawned() {
+        return currentTeleportID >= 0 && dimension != null && !loadedChunks.isEmpty() && !tickValues.isEmpty();
     }
 
     public UUID getUUID() {
@@ -325,8 +335,8 @@ public class Player {
                 lastPacketTime = System.currentTimeMillis();
             } else {
                 // For checking that this actually works lol
-                logger.finest(String.format("%s: %s", getUsername(), /* server.hostname, server.port, */
-                        Chat.unwrap(((ServerChatPacket)event.getPacket()).getMessage(), true)));
+                //logger.finest(String.format("%s: %s", getUsername(), /* server.hostname, server.port, */
+                //        Chat.unwrap(((ServerChatPacket)event.getPacket()).getMessage(), true)));
             }
 
             synchronized (Player.this) {
@@ -397,13 +407,27 @@ public class Player {
                     currentWindowID = ((ServerOpenWindowPacket)event.getPacket()).getWindowId();
 
                 } else if (event.getPacket() instanceof ServerWindowItemsPacket) {
-                    currentWindowID = ((ServerWindowItemsPacket)event.getPacket()).getWindowId();
+                    ServerWindowItemsPacket packet = event.getPacket();
+                    if (packet.getWindowId() >= 0 && packet.getWindowId() <= 100) currentWindowID = packet.getWindowId();
 
                 } else if (event.getPacket() instanceof ServerWindowPropertyPacket) {
-                    currentWindowID = ((ServerWindowPropertyPacket)event.getPacket()).getWindowId();
+                    ServerWindowPropertyPacket packet = event.getPacket();
+                    if (packet.getWindowId() >= 0 && packet.getWindowId() <= 100) currentWindowID = packet.getWindowId();
+
+                } else if (event.getPacket() instanceof ServerSetSlotPacket) {
+                    ServerSetSlotPacket packet = event.getPacket();
+                    if (packet.getWindowId() >= 0 && packet.getWindowId() <= 100) currentWindowID = packet.getWindowId();
 
                 } else if (event.getPacket() instanceof ServerCloseWindowPacket) {
                     currentWindowID = ((ServerCloseWindowPacket)event.getPacket()).getWindowId();
+
+                } else if (event.getPacket() instanceof ServerChunkDataPacket) {
+                    ServerChunkDataPacket packet = event.getPacket();
+                    loadedChunks.add(new ChunkPosition(packet.getColumn().getX(), packet.getColumn().getZ()));
+
+                } else if (event.getPacket() instanceof ServerUnloadChunkPacket) {
+                    ServerUnloadChunkPacket packet = event.getPacket();
+                    loadedChunks.remove(new ChunkPosition(packet.getX(), packet.getZ()));
                 }
             }
         }
@@ -429,11 +453,16 @@ public class Player {
             logger.info(String.format("%s was disconnected for: %s", getUsername(), event.getReason()));
             Emitters.ON_LOGOUT.emit(new Emitters.PlayerLogout(Player.this, event.getReason()));
 
+            loadedChunks.clear();
+
+            dimension = null;
+
             currentTeleportID = -1;
             currentWindowID = -1;
 
             tickValues.clear();
 
+            lastLoginTime = System.currentTimeMillis();
             positionDirty = false;
             angleDirty = false;
 

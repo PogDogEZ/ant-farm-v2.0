@@ -5,10 +5,12 @@ import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.connection.Server;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveQuery;
 
+import java.util.Objects;
+
 /**
  * Something that queries if a chunk is loaded.
  */
-public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQuery>> implements IQuery<T> {
+public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQuery>> implements Comparable<IsLoadedQuery<?>>, IQuery<T> {
 
 	/**
 	 * Provides the default implementation of the query for a given server.
@@ -39,14 +41,41 @@ public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQue
 	public final ChunkPosition position;
 	public final Dimension dimension;
 
-	protected final State expected; // The expected state of this query
-	protected final Priority priority; // The priority of this query
+	public final State expected; // The expected state of this query
+	public final Priority priority; // The priority of this query
 
 	public IsLoadedQuery(ChunkPosition position, Dimension dimension, State expected, Priority priority) {
 		this.position = position;
 		this.dimension = dimension;
 		this.expected = expected;
 		this.priority = priority;
+	}
+
+	@Override
+	public boolean equals(Object other) {
+		return this == other;
+		/*
+		if (this == other) return true;
+		if (other == null || getClass() != other.getClass()) return false;
+		IsLoadedQuery<?> that = (IsLoadedQuery<?>)other;
+		return position.equals(that.position) && dimension.equals(that.dimension);
+		 */
+	}
+
+	@Override
+	public int hashCode() {
+		return Objects.hash(position, dimension);
+	}
+
+	@Override
+	public String toString() {
+		return String.format("%s(position=%s, dimension=%s, expected=%s, priority=%s)", getClass().getSimpleName(),
+				position, dimension, expected, priority);
+	}
+
+	@Override
+	public int compareTo(IsLoadedQuery<?> other) {
+		return priority.compareTo(other.priority);
 	}
 
 	/**

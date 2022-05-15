@@ -29,4 +29,19 @@ public interface IQueryHandle<T extends IQuery> {
      * @param query The query to cancel.
      */
     void cancel(T query);
+
+    /**
+     * @return The number of queries being processed per second.
+     */
+    float getQPS();
+
+    /**
+     * @return The number of queries waiting to be processed.
+     */
+    int getWaitingSize();
+
+    /**
+     * @return The number of queries currently being processed.
+     */
+    int getProcessingSize();
 }
