@@ -36,7 +36,7 @@ public class ConfigHandler {
     }
 
     private void readConfiguration() throws IOException {
-        logger.fine("Reading configuration...");
+        logger.fine("Reading configurations...");
         File configDirectory = new File(this.configDirectory);
         if (!configDirectory.exists() && !configDirectory.mkdirs()) throw new IOException("Could not create config directory.");
 
@@ -50,7 +50,7 @@ public class ConfigHandler {
         if (files != null) {
             for (File file : files) {
                 if (file.isFile() && file.getName().endsWith(".yml")) {
-                    logger.finest(String.format("Reading configuration %s...", file.getName()));
+                    logger.finest(String.format("Reading configuration %s.", file.getName()));
                     try (InputStream inputStream = new FileInputStream(file)) {
                         Map<String, Object> map = yaml.load(inputStream);
                         if (map != null /* && !map.containsValue(null) */) {
@@ -69,7 +69,7 @@ public class ConfigHandler {
     }
 
     private void saveConfiguration() throws IOException {
-        logger.finer("Saving configuration...");
+        logger.finer("Saving configurations...");
         File configDirectory = new File(this.configDirectory);
         if (!configDirectory.exists() && !configDirectory.mkdirs()) throw new IOException("Could not create config directory.");
 
@@ -85,12 +85,12 @@ public class ConfigHandler {
             int options = 0;
             for (IConfig configuration : configurations) {
                 Map<String, Object> values = new HashMap<>();
-                for (Option<?> option : configuration.getOptions()) {
+                for (Option<?> option : configuration.getOptions(true)) {
                     ++options;
                     values.put(option.name, option.value);
                 }
 
-                logger.finest(String.format("Dumping configuration %s (%s)...", configuration.getFullIdentifier(), configuration));
+                logger.finest(String.format("Dumping configuration %s (%s).", configuration.getFullIdentifier(), configuration));
                 OutputStream outputStream = new FileOutputStream(new File(configDirectory, configuration.getFullIdentifier() + ".yml"));
                 yaml.dump(values, new OutputStreamWriter(outputStream));
                 outputStream.close();
@@ -98,7 +98,7 @@ public class ConfigHandler {
                 this.values.put(configuration.getFullIdentifier(), values);
             }
 
-            logger.finer(String.format("Saved %d options in %d configurations.", options, configurations.size()));
+            logger.finer(String.format("Saved %d options from %d configurations.", options, configurations.size()));
         }
     }
 
@@ -132,13 +132,13 @@ public class ConfigHandler {
             Map<String, Object> values = this.values.get(configuration.getFullIdentifier());
             if (values != null) {
                 logger.finer(String.format("Populating %d values for configuration %s.", values.size(), configuration.getFullIdentifier()));
-                for (Option option : configuration.getOptions()) option.value = values.get(option.name);
+                for (Option option : configuration.getOptions(true)) option.value = values.get(option.name);
                 values.clear();
             } else {
                 values = new HashMap<>();
             }
 
-            for (Option<?> option : configuration.getOptions()) values.put(option.name, option.value);
+            for (Option<?> option : configuration.getOptions(true)) values.put(option.name, option.value);
             logger.finer(String.format("%d values found for configuration %s.", values.size(), configuration.getFullIdentifier()));
             this.values.put(configuration.getFullIdentifier(), values);
         }

@@ -4,6 +4,7 @@ import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.auth.service.AuthenticationService;
 import com.github.steveice10.mc.protocol.MinecraftProtocol;
 import com.github.steveice10.mc.protocol.data.game.PlayerListEntry;
+import com.github.steveice10.mc.protocol.data.game.PlayerListEntryAction;
 import com.github.steveice10.mc.protocol.packet.ingame.client.ClientChatPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionRotationPacket;
@@ -440,6 +441,9 @@ public class Player implements IConfig {
                     ServerPlayerListEntryPacket packet = event.getPacket();
 
                     for (PlayerListEntry entry : packet.getEntries()) {
+                        if (packet.getAction() == PlayerListEntryAction.ADD_PLAYER)
+                            yesCom.playersHandler.setName(entry.getProfile().getId(), entry.getProfile().getName());
+
                         if (entry.getProfile().getId().equals(getUUID())) {
                             serverPing = entry.getPing();
                             logger.finer(String.format("%s server ping is %dms.", getUsername(), serverPing));
@@ -506,7 +510,7 @@ public class Player implements IConfig {
                     ServerSpawnPlayerPacket packet = event.getPacket();
 
                     if (VISUAL_RANGE_LOGOUT.value && !server.isTrusted(packet.getUUID())) {
-                        String playerName = server.playerNames.getOrDefault(packet.getUUID(), packet.getUUID().toString());
+                        String playerName = yesCom.playersHandler.getName(packet.getUUID(), packet.getUUID().toString());
                         disconnect(String.format("%s entered visual range at xyz: %.1f, %.1f, %.1f.", playerName,
                                 packet.getX(), packet.getY(), packet.getY()));
                         Emitters.ON_REPORT.emit(new VisualRangeLogoutReport(Player.this, packet.getUUID()));

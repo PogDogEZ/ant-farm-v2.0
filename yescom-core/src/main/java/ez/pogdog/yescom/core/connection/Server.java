@@ -52,7 +52,6 @@ public class Server implements IConfig {
             "The auto reconnect time for players, in milliseconds.",
             4000
     );
-
     public final Option<Integer> AUTO_LOGOUT_RECONNECT_TIME = new Option<>(
             "Auto logout reconnect time",
             "How long to wait before reconnecting a player after an automatic logout.",
@@ -64,7 +63,6 @@ public class Server implements IConfig {
             "The TPS variation that would be reported as extreme.",
             6.0
     );
-
     public final Option<Integer> HIGH_TSLP = new Option<>(
             "High TSLP",
             "The TSLP that would be reported as high.",
@@ -77,17 +75,6 @@ public class Server implements IConfig {
 
     public final List<Player> players = new ArrayList<>();
     public final List<IQueryHandle<?>> handles = new ArrayList<>();
-    public final List<UUID> trustedPlayers = new ArrayList<>(Arrays.asList( // TODO: Make this more global
-            UUID.fromString("2a802c42-c2b9-4ea3-b9e7-5c3d8618fb8f"), // node3112
-            UUID.fromString("761a71ca-8aa5-4659-b170-0b98a6e22b26"), // myristicin
-            UUID.fromString("9111723e-e7fd-4a51-beaa-3ff3690f912b"), // node3114
-            UUID.fromString("dac18c24-9497-48a6-9b3d-966461c09bff"), // DiabolicalHacker
-            UUID.fromString("9ebb3926-6499-4db9-8990-f71c3d0127da"), // InvalidMove
-            UUID.fromString("9c32a1e6-2558-49fe-a66c-fd5788d18265"), // Tom_Scott
-            UUID.fromString("89a905ea-78bb-4f62-8d72-0ff6b2cbf61f") // ilovephantom
-    ));
-
-    public final Map<UUID, String> playerNames = new ConcurrentHashMap<>(); // Mapping of UUID -> name for quick lookup
 
     public final String hostname;
     public final int port;
@@ -252,7 +239,7 @@ public class Server implements IConfig {
         for (Player player : players) {
             if (uuid.equals(player.getUUID())) return true;
         }
-        return trustedPlayers.contains(uuid);
+        return yesCom.playersHandler.isTrusted(uuid);
     }
 
     /* ------------------------------ Setters and getters ------------------------------ */
