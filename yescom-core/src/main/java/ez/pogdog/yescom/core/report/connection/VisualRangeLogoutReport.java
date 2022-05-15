@@ -17,7 +17,7 @@ public class VisualRangeLogoutReport extends Report<UUID> {
 
     @Override
     public String getName() {
-        return "Visual Range Logout";
+        return "Visual range logout";
     }
 
     @Override

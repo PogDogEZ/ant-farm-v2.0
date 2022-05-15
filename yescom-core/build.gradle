@@ -20,6 +20,7 @@ dependencies {
     compile project(":yescom:api")
 
     compile group: "commons-cli", name: "commons-cli", version: "1.4"
+    compile group: "org.yaml", name: "snakeyaml", version: "1.30"
 
     compile group: "black.ninia", name: "jep", version: "4.0.3"
     compile group: "com.github.Steveice10", name: "MCProtocolLib", version: "1.12.2-2"

@@ -18,7 +18,7 @@ public class PacketLossReport extends Report<Integer> {
 
     @Override
     public String getName() {
-        return "Packet Loss";
+        return "Packet loss";
     }
 
     @Override

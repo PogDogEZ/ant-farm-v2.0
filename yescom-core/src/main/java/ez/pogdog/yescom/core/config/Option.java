@@ -11,10 +11,20 @@ import java.lang.annotation.Target;
  */
 public class Option<T> { // TODO: Names, descriptions, etc.
 
+    public final String name;
+    public final String description;
+
     public T value;
 
-    public Option(T value) {
+    public Option(String name, String description, T value) {
+        this.name = name;
+        this.description = description;
+
         this.value = value;
+    }
+
+    public Option(String name, T value) {
+        this(name, "<no description>", value);
     }
 
     /**

@@ -41,6 +41,7 @@ import java.util.logging.Logger;
 public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfig {
 
     private final Logger logger = Logging.getLogger("yescom.core.query.invalidmove");
+    private final YesCom yesCom = YesCom.getInstance();
 
     /**
      * Valid storages / containers that can be used.
@@ -54,19 +55,32 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
     /* ------------------------------ Options ------------------------------ */
 
-    /**
-     * How many queries (that are expected to be loaded) to dispatch, per tick, per player.
-     */
-    public final Option<Float> LOADED_QUERIES_PER_TICK = new Option<>(1.0f);
+    public final Option<Double> LOADED_QUERIES_PER_TICK = new Option<>(
+            "Loaded queries per tick",
+            "The number of queries (that are expected to be loaded) to dispatch, per tick, per player.",
+            1.0
+    );
+    public final Option<Double> UNLOADED_QUERIES_PER_TICK = new Option<>(
+            "Unloaded queries per tick",
+            "The number of queries (that are expected to be unloaded) to dispatch, per tick, per player.",
+            2.0
+    );
 
-    /**
-     * How many queries (that are expected to be unloaded) to dispatch, per tick, per player.
-     */
-    public final Option<Float> UNLOADED_QUERIES_PER_TICK = new Option<>(5.0f);
-
-    public final Option<Boolean> ARZI_MODE = new Option<>(true);
-    public final Option<Boolean> SWING_ARM = new Option<>(true);
-    public final Option<Boolean> WID_RESYNC = new Option<>(true);
+    public final Option<Boolean> ARZI_MODE = new Option<>(
+            "ARZI mode",
+            "Opens the storage before every query. Can be very useful for higher pings.",
+            true
+    );
+    public final Option<Boolean> SWING_ARM = new Option<>(
+            "Swing arm",
+            "Swing the player's arm when opening the storage?",
+            true
+    );
+    public final Option<Boolean> WID_RESYNC = new Option<>(
+            "WID resync",
+            "Packet loss detection and resynchronization based on window ID prediction.",
+            true
+    );
 
     /* ------------------------------ Other fields ------------------------------ */
 
@@ -85,9 +99,10 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     public InvalidMoveHandle(Server server) {
         logger.fine(String.format("New invalid move handle for server %s:%d.", server.hostname, server.port));
         this.server = server;
+        yesCom.configHandler.addConfiguration(this);
 
         for (Player player : this.server.players) available.put(player, new PlayerHandle(player));
-        logger.finer(String.format("%d players available.", available.size()));
+        logger.finer(String.format("%d player(s) available.", available.size()));
 
         logger.finer("Connecting emitters...");
         Emitters.ON_LOGIN.connect(this::onLogin);
@@ -155,6 +170,16 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     @Override
     public int getProcessingSize() {
         return callbacks.size() - waiting.size(); // Lol, hack
+    }
+
+    @Override
+    public String getIdentifier() {
+        return "invalid-move-handle";
+    }
+
+    @Override
+    public IConfig getParent() {
+        return server;
     }
 
     /* ------------------------------ Events ------------------------------ */

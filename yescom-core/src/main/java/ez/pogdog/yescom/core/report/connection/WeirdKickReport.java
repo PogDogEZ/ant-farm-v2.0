@@ -18,7 +18,7 @@ public class WeirdKickReport extends Report<String> {
 
     @Override
     public String getName() {
-        return "Weird Kick";
+        return "Weird kick";
     }
 
     @Override

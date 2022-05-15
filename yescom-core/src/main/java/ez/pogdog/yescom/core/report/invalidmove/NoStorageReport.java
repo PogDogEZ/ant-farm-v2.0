@@ -16,7 +16,7 @@ public class NoStorageReport extends Report<Object> {
 
     @Override
     public String getName() {
-        return "No Storage";
+        return "No storage";
     }
 
     @Override

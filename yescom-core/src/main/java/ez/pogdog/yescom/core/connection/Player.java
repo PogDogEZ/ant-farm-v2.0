@@ -1,5 +1,6 @@
 package ez.pogdog.yescom.core.connection;
 
+import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.auth.service.AuthenticationService;
 import com.github.steveice10.mc.protocol.MinecraftProtocol;
 import com.github.steveice10.mc.protocol.data.game.PlayerListEntry;
@@ -25,6 +26,7 @@ import com.github.steveice10.packetlib.event.session.*;
 import com.github.steveice10.packetlib.packet.Packet;
 import com.github.steveice10.packetlib.tcp.TcpClientSession;
 import com.github.steveice10.packetlib.tcp.TcpSessionFactory;
+import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.Angle;
 import ez.pogdog.yescom.api.data.ChunkPosition;
@@ -50,35 +52,38 @@ import java.util.logging.Logger;
 public class Player implements IConfig {
 
     private final Logger logger = Logging.getLogger("yescom.core.connection");
+    private final YesCom yesCom = YesCom.getInstance();
 
     /* ------------------------------ Options ------------------------------ */
 
-    /**
-     * Don't allow auto reconnect to occur.
-     */
-    public final Option<Boolean> AUTO_RECONNECT = new Option<>(true);
+    public final Option<Boolean> AUTO_RECONNECT = new Option<>(
+            "Auto reconnect",
+            "Automatically reconnects this player to the server.",
+            true
+    );
+    public final Option<Boolean> DISABLE_AUTO_RECONNECT_ON_LOGOUT = new Option<>(
+            "Disable auto reconnect on logout",
+            "Disables auto reconnect on logout (due to low health or players entering visual range).",
+            false
+    );
 
-    /**
-     * Disables auto reconnect on logout.
-     */
-    public final Option<Boolean> DISABLE_AUTO_RECONNECT_ON_LOGOUT = new Option<>(false);
-
-    /**
-     * The health to log out on, if reached.
-     */
-    public final Option<Float> LOGOUT_HEALTH = new Option<>(5.0f);
-
-    /**
-     * Log out if another player enters visual range.
-     */
-    public final Option<Boolean> VISUAL_RANGE_LOGOUT = new Option<>(true);
+    public final Option<Double> LOGOUT_HEALTH = new Option<>(
+            "Logout health",
+            "The health to logout on, if reached.",
+            5.0
+    );
+    public final Option<Boolean> VISUAL_RANGE_LOGOUT = new Option<>(
+            "Visual range logout",
+            "Logs the player out if another (untrusted) player enters visual range.",
+            true
+    );
 
     /* ------------------------------ Other fields ------------------------------ */
 
     private final Server server;
     private final IAccount account;
 
-    private AuthenticationService authService;
+    private final AuthenticationService authService;
     private Session session;
 
     /* ------------------------------ Player "stats" ------------------------------ */
@@ -120,12 +125,15 @@ public class Player implements IConfig {
      * @param server The server that this player belongs to.
      * @param account The account the player will use.
      */
-    public Player(Server server, IAccount account) {
+    public Player(Server server, IAccount account) throws RequestException {
         this.server = server;
         this.account = account;
 
         authService = new AuthenticationService();
         session = null;
+
+        this.account.login(authService);
+        yesCom.configHandler.addConfiguration(this);
 
         lastLoginTime = System.currentTimeMillis() - this.server.AUTO_RECONNECT_TIME.value;
         lastAutoLogoutTime = System.currentTimeMillis() - this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
@@ -137,6 +145,16 @@ public class Player implements IConfig {
         lastPacketTime = System.currentTimeMillis();
         lastTimeUpdate = -1L;
         lastWorldTicks = 0L;
+    }
+
+    @Override
+    public String getIdentifier() {
+        return String.format("player-%s", getUUID());
+    }
+
+    @Override
+    public IConfig getParent() {
+        return server;
     }
 
     /**

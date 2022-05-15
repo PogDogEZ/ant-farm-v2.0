@@ -135,6 +135,8 @@ public class YesCom extends Thread implements IConfig {
     private boolean running;
 
     public YesCom(String accountsFile, String configDirectory) throws Exception {
+        setName("yescom-main-thread");
+
         logger.fine("Locating jar...");
         String jarPath = findJar();
         logger.fine(String.format("Found jar at %s.", jarPath));
@@ -142,6 +144,7 @@ public class YesCom extends Thread implements IConfig {
         // servers.add(new Server("constantiam.net", 25565)); // :p
         accountHandler = new AccountHandler(accountsFile);
         configHandler = new ConfigHandler(configDirectory);
+        configHandler.addConfiguration(this);
 
         /*
         logger.fine("Bootstrapping jep...");
@@ -164,6 +167,7 @@ public class YesCom extends Thread implements IConfig {
 
             Emitters.ON_PRE_TICK.emit();
             for (Server server : servers) server.tick();
+            configHandler.tick();
             Emitters.ON_POST_TICK.emit();
 
             long elapsed = System.currentTimeMillis() - start;
@@ -176,6 +180,16 @@ public class YesCom extends Thread implements IConfig {
                 logger.warning(String.format("Tick took %dms!", elapsed));
             }
         }
+    }
+
+    @Override
+    public String getIdentifier() {
+        return "root";
+    }
+
+    @Override
+    public IConfig getParent() {
+        return null; // No parent for the root config
     }
 
     /**

@@ -15,7 +15,7 @@ public class HealthLogoutReport extends Report<Float> {
 
     @Override
     public String getName() {
-        return "Health Logout";
+        return "Health logout";
     }
 
     @Override

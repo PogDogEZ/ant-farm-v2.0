@@ -1,5 +1,6 @@
 package ez.pogdog.yescom.core.connection;
 
+import com.github.steveice10.mc.auth.exception.request.RequestException;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.core.Emitters;
@@ -29,33 +30,46 @@ public class Server implements IConfig {
 
     /* ------------------------------ Options ------------------------------ */
 
-    public final Option<Boolean> DIGGING_ENABLED = new Option<>(true);
-    public final Option<Boolean> INVALID_MOVE_ENABLED = new Option<>(true);
+    public final Option<Boolean> DIGGING_ENABLED = new Option<>(
+            "Digging enabled",
+            "Enables digging packet queries to be made when querying for loaded chunks.",
+            false
+    );
+    public final Option<Boolean> INVALID_MOVE_ENABLED = new Option<>(
+            "Invalid move enabled",
+            "Enables invalid move packet queries to be made when querying for loaded chunks.",
+            true
+    );
 
-    /**
-     * Global login time, in milliseconds. All players are restricted to this.
-     */
-    public final Option<Integer> GLOBAL_LOGIN_TIME = new Option<>(8000);
+    public final Option<Integer> GLOBAL_LOGIN_TIME = new Option<>(
+            "Global login time",
+            "How often players can log in, in milliseconds. This is global, so players can limit other players.",
+            8000
+    );
 
-    /**
-     * On a per-player basis. How often to attempt to auto reconnect to the server.
-     */
-    public final Option<Integer> AUTO_RECONNECT_TIME = new Option<>(4000);
+    public final Option<Integer> AUTO_RECONNECT_TIME = new Option<>(
+            "Auto reconnect time",
+            "The auto reconnect time for players, in milliseconds.",
+            4000
+    );
 
-    /**
-     * The amount of time to wait before reconnecting after an automatic logout.
-     */
-    public final Option<Integer> AUTO_LOGOUT_RECONNECT_TIME = new Option<>(120000); // 2 minutes by default
+    public final Option<Integer> AUTO_LOGOUT_RECONNECT_TIME = new Option<>(
+            "Auto logout reconnect time",
+            "How long to wait before reconnecting a player after an automatic logout.",
+            120000
+    );
 
-    /**
-     * The TPS variation that would be reported as extreme.
-     */
-    public final Option<Float> EXTREME_TPS_CHANGE = new Option<>(6.0f);
+    public final Option<Double> EXTREME_TPS_CHANGE = new Option<>( // These have to be doubles unfortunately, for YAML and Python :(
+            "Extreme TPS change",
+            "The TPS variation that would be reported as extreme.",
+            6.0
+    );
 
-    /**
-     * The TSLP, in milliseconds that would be reported as high.
-     */
-    public final Option<Integer> HIGH_TSLP = new Option<>(1000);
+    public final Option<Integer> HIGH_TSLP = new Option<>(
+            "High TSLP",
+            "The TSLP that would be reported as high.",
+            1000
+    );
 
     // TODO: Packet loss and latency perhaps?
 
@@ -78,6 +92,8 @@ public class Server implements IConfig {
     public final String hostname;
     public final int port;
 
+    public final InvalidMoveHandle invalidMoveHandle; // Direct reference for ease, it's hacky but who cares
+
     private float tickrate;
     private float tslp;
     private float ping;
@@ -93,26 +109,39 @@ public class Server implements IConfig {
     public Server(String hostname, int port) {
         this.hostname = hostname;
         this.port = port;
+        yesCom.configHandler.addConfiguration(this);
+
+        invalidMoveHandle = new InvalidMoveHandle(this);
+        handles.add(invalidMoveHandle);
+
+        logger.fine(String.format("%s handles for server %s:%d.", handles.size(), hostname, port));
 
         lastLoginTime = System.currentTimeMillis() - GLOBAL_LOGIN_TIME.value;
+        lastStatsTime = System.currentTimeMillis();
 
         Emitters.ON_ACCOUNT_ADDED.connect(this::onAccountAdded);
         List<IAccount> accounts = yesCom.accountHandler.getAccounts();
         if (!accounts.isEmpty()) {
             logger.finer(String.format("Adding %d account(s) to %s:%d...", accounts.size(), hostname, port));
-            for (IAccount account : accounts) players.add(new Player(this, account));
+            for (IAccount account : accounts) onAccountAdded(account);
         }
         logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));
-
-        handles.add(new InvalidMoveHandle(this));
-
-        lastStatsTime = System.currentTimeMillis();
     }
 
     @Override
     public String toString() {
         return String.format("Server(host=%s, port=%d, players=%d, tps=%.1f, ping=%.1f, qps=%.1f)", hostname, port,
                 players.size(), tickrate, ping, queriesPerSecond);
+    }
+
+    @Override
+    public String getIdentifier() {
+        return String.format("server-%s-%d", hostname.replace(".", "_"), port);
+    }
+
+    @Override
+    public IConfig getParent() {
+        return yesCom;
     }
 
     /* ------------------------------ Events ------------------------------ */
@@ -122,7 +151,12 @@ public class Server implements IConfig {
             if (player.getAccount().equals(account)) return;
         }
 
-        players.add(new Player(this, account));
+        try {
+            players.add(new Player(this, account));
+        } catch (RequestException error) {
+            logger.warning(String.format("Failed to add account %s to %s:%d: %s.", account, hostname, port, error.getMessage()));
+            logger.throwing(getClass().getSimpleName(), "onAccountAdded", error);
+        }
     }
 
 	/*
