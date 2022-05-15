@@ -3,6 +3,7 @@ package ez.pogdog.yescom.core.connection;
 import com.github.steveice10.mc.auth.service.AuthenticationService;
 import com.github.steveice10.mc.protocol.MinecraftProtocol;
 import com.github.steveice10.mc.protocol.data.game.PlayerListEntry;
+import com.github.steveice10.mc.protocol.packet.ingame.client.ClientChatPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionRotationPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerRotationPacket;
@@ -13,6 +14,7 @@ import com.github.steveice10.mc.protocol.packet.ingame.server.ServerPlayerListEn
 import com.github.steveice10.mc.protocol.packet.ingame.server.ServerRespawnPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.entity.player.ServerPlayerHealthPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.entity.player.ServerPlayerPositionRotationPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.server.entity.spawn.ServerSpawnPlayerPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.window.*;
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerChunkDataPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerUnloadChunkPacket;
@@ -30,7 +32,11 @@ import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.api.data.Position;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.account.IAccount;
+import ez.pogdog.yescom.core.config.IConfig;
+import ez.pogdog.yescom.core.config.Option;
 import ez.pogdog.yescom.core.report.connection.ExtremeTPSReport;
+import ez.pogdog.yescom.core.report.connection.HealthLogoutReport;
+import ez.pogdog.yescom.core.report.connection.VisualRangeLogoutReport;
 import ez.pogdog.yescom.core.util.Chat;
 
 import java.util.ArrayList;
@@ -41,9 +47,33 @@ import java.util.logging.Logger;
 /**
  * A player that is connected to a {@link Server}.
  */
-public class Player {
+public class Player implements IConfig {
 
     private final Logger logger = Logging.getLogger("yescom.core.connection");
+
+    /* ------------------------------ Options ------------------------------ */
+
+    /**
+     * Don't allow auto reconnect to occur.
+     */
+    public final Option<Boolean> AUTO_RECONNECT = new Option<>(true);
+
+    /**
+     * Disables auto reconnect on logout.
+     */
+    public final Option<Boolean> DISABLE_AUTO_RECONNECT_ON_LOGOUT = new Option<>(false);
+
+    /**
+     * The health to log out on, if reached.
+     */
+    public final Option<Float> LOGOUT_HEALTH = new Option<>(5.0f);
+
+    /**
+     * Log out if another player enters visual range.
+     */
+    public final Option<Boolean> VISUAL_RANGE_LOGOUT = new Option<>(true);
+
+    /* ------------------------------ Other fields ------------------------------ */
 
     private final Server server;
     private final IAccount account;
@@ -71,15 +101,12 @@ public class Player {
     private int serverPing = 0; // TODO: Estimated ping as well?
     private float serverTPS = 0.0f; // FIXME: Will this cause issues?
 
-    /* ------------------------------ Modifiable fields ------------------------------ */
-
-    public boolean limited = false; // Limited means that it can't connect automatically
-
     /* ------------------------------ Internal fields ------------------------------ */
 
     private final List<Float> tickValues = new ArrayList<>();
 
     private long lastLoginTime;
+    private long lastAutoLogoutTime;
     private int failedConnections;
 
     private boolean positionDirty;
@@ -100,7 +127,8 @@ public class Player {
         authService = new AuthenticationService();
         session = null;
 
-        lastLoginTime = System.currentTimeMillis() - this.server.PLAYER_LOGIN_TIME.value;
+        lastLoginTime = System.currentTimeMillis() - this.server.AUTO_RECONNECT_TIME.value;
+        lastAutoLogoutTime = System.currentTimeMillis() - this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
         failedConnections = 0;
 
         positionDirty = false;
@@ -115,8 +143,9 @@ public class Player {
      * Ticks this player.
      */
     public void tick() {
-        // TODO: Account for health and other players entering our visual range
-        if (!limited && server.canLogin() && !isConnected() && System.currentTimeMillis() - lastLoginTime > server.PLAYER_LOGIN_TIME.value)
+        boolean autoReconnectReady = System.currentTimeMillis() - lastLoginTime > server.AUTO_RECONNECT_TIME.value;
+        boolean autoLogoutReady = System.currentTimeMillis() - lastAutoLogoutTime >= this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
+        if (AUTO_RECONNECT.value && server.canLogin() && !isConnected() && autoReconnectReady && autoLogoutReady)
             connect();
 
         if (isConnected()) {
@@ -135,6 +164,8 @@ public class Player {
                 session.send(new ClientPlayerRotationPacket(onGround, angle.getYaw(), angle.getPitch()));
                 angleDirty = false;
             }
+
+            if (isSpawned()) failedConnections = 0;
         }
     }
 
@@ -155,19 +186,16 @@ public class Player {
                 Client client = new Client(server.hostname, server.port, protocol, new TcpSessionFactory(null));
 
                 session = new TcpClientSession(server.hostname, server.port, protocol, client, null);
-                // TODO: Add adapters here, maybe reflectively?
                 session.addListener(new SessionReactionAdapter());
                 session.connect();
 
                 server.resetLoginTime();
-                failedConnections = 0;
 
             } catch (Exception error) {
                 logger.warning(String.format("Failed to connect %s to %s:%d: %s", getUsername(), server.hostname, server.port, error.getMessage()));
                 logger.throwing(getClass().getSimpleName(), "connect", error);
 
-                // TODO: Autoreconnect time, don't increment timer if server is actually down
-                lastLoginTime += server.PLAYER_LOGIN_TIME.value * (long)failedConnections++; // Don't spam connection attempts
+                // lastLoginTime += server.AUTO_RECONNECT_TIME.value * (long)failedConnections++; // Don't spam connection attempts
             }
         }
     }
@@ -184,7 +212,15 @@ public class Player {
      * Sends a packet to the server, duh.
      */
     public void send(Packet packet) {
-        if (session != null && session.isConnected()) session.send(packet);
+        if (isConnected()) session.send(packet);
+    }
+
+    /**
+     * Sends a message into chat for this player.
+     * @param message The message to send.
+     */
+    public void chat(String message) {
+        if (isConnected()) session.send(new ClientChatPacket(message));
     }
 
     /* ------------------------------ Setters and getters ------------------------------ */
@@ -335,8 +371,8 @@ public class Player {
                 lastPacketTime = System.currentTimeMillis();
             } else {
                 // For checking that this actually works lol
-                //logger.finest(String.format("%s: %s", getUsername(), /* server.hostname, server.port, */
-                //        Chat.unwrap(((ServerChatPacket)event.getPacket()).getMessage(), true)));
+                logger.finest(String.format("%s: %s", getUsername(), /* server.hostname, server.port, */
+                        Chat.unwrap(((ServerChatPacket)event.getPacket()).getMessage(), true)));
             }
 
             synchronized (Player.this) {
@@ -365,6 +401,17 @@ public class Player {
                     hunger = packet.getFood();
                     saturation = packet.getSaturation();
 
+                    if (health <= LOGOUT_HEALTH.value) {
+                        disconnect(String.format("Low health (%.1f).", health));
+                        Emitters.ON_REPORT.emit(new HealthLogoutReport(Player.this, health));
+                        lastAutoLogoutTime = System.currentTimeMillis();
+
+                        if (DISABLE_AUTO_RECONNECT_ON_LOGOUT.value) {
+                            logger.info(String.format("Auto reconnect disabled for %s.", getUsername()));
+                            AUTO_RECONNECT.value = false;
+                        }
+                    }
+
                 } else if (event.getPacket() instanceof ServerJoinGamePacket) {
                     dimension = Dimension.fromMC(((ServerJoinGamePacket)event.getPacket()).getDimension());
 
@@ -377,6 +424,7 @@ public class Player {
                     for (PlayerListEntry entry : packet.getEntries()) {
                         if (entry.getProfile().getId().equals(getUUID())) {
                             serverPing = entry.getPing();
+                            logger.finer(String.format("%s server ping is %dms.", getUsername(), serverPing));
                             break;
                         }
                     }
@@ -388,19 +436,26 @@ public class Player {
                         lastTimeUpdate = System.currentTimeMillis();
                         lastWorldTicks = packet.getWorldAge();
                     } else {
-                        float delta = (packet.getWorldAge() - lastWorldTicks) / ((System.currentTimeMillis() - lastTimeUpdate) / 1000.0f);
-                        if (serverTPS != 0.0f && Math.abs(delta - serverTPS) > server.EXTREME_TPS_CHANGE.value)
-                            Emitters.ON_REPORT.emit(new ExtremeTPSReport(Player.this, delta));
+                        float newTPS = (packet.getWorldAge() - lastWorldTicks) / ((System.currentTimeMillis() - lastTimeUpdate) / 1000.0f);
+                        if (!Float.isFinite(newTPS)) return; // Damn
 
-                        tickValues.add(delta);
+                        tickValues.add(newTPS);
                         while (tickValues.size() > 5) tickValues.remove(0);
                         lastTimeUpdate = System.currentTimeMillis();
                         lastWorldTicks = packet.getWorldAge();
+
+                        float old = serverTPS;
 
                         serverTPS = 0.0f;
                         for (float value : tickValues) serverTPS += value;
                         serverTPS /= tickValues.size();
                         // logger.finest(String.format("%s:%d estimated tickrate: %.1f", server.hostname, server.port, serverTPS));
+
+                        if (old != 0.0f && Math.abs(serverTPS - old) > server.EXTREME_TPS_CHANGE.value) {
+                            logger.finer(String.format("%s extreme TPS change, old: %.1f, new: %.1f.", getUsername(),
+                                    old, serverTPS));
+                            Emitters.ON_REPORT.emit(new ExtremeTPSReport(Player.this, old));
+                        }
                     }
 
                 } else if (event.getPacket() instanceof ServerOpenWindowPacket) {
@@ -428,6 +483,22 @@ public class Player {
                 } else if (event.getPacket() instanceof ServerUnloadChunkPacket) {
                     ServerUnloadChunkPacket packet = event.getPacket();
                     loadedChunks.remove(new ChunkPosition(packet.getX(), packet.getZ()));
+
+                } else if (event.getPacket() instanceof ServerSpawnPlayerPacket) {
+                    ServerSpawnPlayerPacket packet = event.getPacket();
+
+                    if (VISUAL_RANGE_LOGOUT.value && !server.isTrusted(packet.getUUID())) {
+                        String playerName = server.playerNames.getOrDefault(packet.getUUID(), packet.getUUID().toString());
+                        disconnect(String.format("%s entered visual range at xyz: %.1f, %.1f, %.1f.", playerName,
+                                packet.getX(), packet.getY(), packet.getY()));
+                        Emitters.ON_REPORT.emit(new VisualRangeLogoutReport(Player.this, packet.getUUID()));
+                        lastAutoLogoutTime = System.currentTimeMillis();
+
+                        if (DISABLE_AUTO_RECONNECT_ON_LOGOUT.value) {
+                            logger.info(String.format("Auto reconnect disabled for %s.", getUsername()));
+                            AUTO_RECONNECT.value = false;
+                        }
+                    }
                 }
             }
         }
@@ -453,6 +524,12 @@ public class Player {
             logger.info(String.format("%s was disconnected for: %s", getUsername(), event.getReason()));
             Emitters.ON_LOGOUT.emit(new Emitters.PlayerLogout(Player.this, event.getReason()));
 
+            lastLoginTime = System.currentTimeMillis();
+            if (!isSpawned()) {
+                lastLoginTime += server.AUTO_RECONNECT_TIME.value * (long)failedConnections++;
+                logger.finer(String.format("%s has %d failed connection attempt(s).", getUsername(), failedConnections));
+            }
+
             loadedChunks.clear();
 
             dimension = null;
@@ -462,7 +539,6 @@ public class Player {
 
             tickValues.clear();
 
-            lastLoginTime = System.currentTimeMillis();
             positionDirty = false;
             angleDirty = false;
 

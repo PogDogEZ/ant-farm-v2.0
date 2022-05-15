@@ -5,7 +5,7 @@ import ez.pogdog.yescom.api.event.Emitter;
 import ez.pogdog.yescom.api.util.Pair;
 import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.connection.Player;
-import ez.pogdog.yescom.core.report.IReport;
+import ez.pogdog.yescom.core.report.Report;
 
 /**
  * Global {@link Emitter}s for YesCom.
@@ -57,7 +57,7 @@ public class Emitters {
      * Fired when a report is created.
      */
     @SuppressWarnings("rawtypes")
-    public static final Emitter<IReport> ON_REPORT = new Emitter<>(IReport.class);
+    public static final Emitter<Report> ON_REPORT = new Emitter<>(Report.class);
 
     /* ------------------------------ Evil workaround / classes ------------------------------ */
 

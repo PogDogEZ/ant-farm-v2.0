@@ -3,32 +3,29 @@ package ez.pogdog.yescom.core.report.connection;
 import ez.pogdog.yescom.core.connection.Player;
 import ez.pogdog.yescom.core.report.Report;
 
-/**
- * Occurs when an extreme tickrate change is detected.
- */
-public class ExtremeTPSReport extends Report<Float> {
+public class HealthLogoutReport extends Report<Float> {
 
     private final Player player;
-    private final float delta;
+    private final float health;
 
-    public ExtremeTPSReport(Player player, float delta) {
+    public HealthLogoutReport(Player player, float health) {
         this.player = player;
-        this.delta = delta;
+        this.health = health;
     }
 
     @Override
     public String getName() {
-        return "Extreme TPS";
+        return "Health Logout";
     }
 
     @Override
     public String getDescription() {
-        return "Occurs when an extreme tickrate change is detected.";
+        return "Occurs when a player is kicked because their health is below a certain threshold.";
     }
 
     @Override
     public Float getData() {
-        return delta;
+        return health;
     }
 
     @Override

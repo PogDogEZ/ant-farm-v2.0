@@ -1,12 +1,12 @@
 package ez.pogdog.yescom.core.report.invalidmove;
 
 import ez.pogdog.yescom.core.connection.Player;
-import ez.pogdog.yescom.core.report.IReport;
+import ez.pogdog.yescom.core.report.Report;
 
 /**
  * Reports that some form of packet loss has occurred.
  */
-public class PacketLossReport implements IReport<Integer> {
+public class PacketLossReport extends Report<Integer> {
 
     private final Player player;
     private final int type;

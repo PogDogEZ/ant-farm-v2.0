@@ -1,12 +1,12 @@
 package ez.pogdog.yescom.core.report.connection;
 
 import ez.pogdog.yescom.core.connection.Player;
-import ez.pogdog.yescom.core.report.IReport;
+import ez.pogdog.yescom.core.report.Report;
 
 /**
  * Indicates that a weird kick has occurred (the reason is not known).
  */
-public class WeirdKickReport implements IReport<String> {
+public class WeirdKickReport extends Report<String> {
 
     private final Player player;
     private final String reason;

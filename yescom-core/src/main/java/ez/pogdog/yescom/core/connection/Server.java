@@ -11,7 +11,11 @@ import ez.pogdog.yescom.core.query.IQueryHandle;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -34,14 +38,19 @@ public class Server implements IConfig {
     public final Option<Integer> GLOBAL_LOGIN_TIME = new Option<>(8000);
 
     /**
-     * On a per-player basis. Essentially how often the player requests to login.
+     * On a per-player basis. How often to attempt to auto reconnect to the server.
      */
-    public final Option<Integer> PLAYER_LOGIN_TIME = new Option<>(4000);
+    public final Option<Integer> AUTO_RECONNECT_TIME = new Option<>(4000);
+
+    /**
+     * The amount of time to wait before reconnecting after an automatic logout.
+     */
+    public final Option<Integer> AUTO_LOGOUT_RECONNECT_TIME = new Option<>(120000); // 2 minutes by default
 
     /**
      * The TPS variation that would be reported as extreme.
      */
-    public final Option<Float> EXTREME_TPS_CHANGE = new Option<>(5.0f);
+    public final Option<Float> EXTREME_TPS_CHANGE = new Option<>(6.0f);
 
     /**
      * The TSLP, in milliseconds that would be reported as high.
@@ -54,6 +63,17 @@ public class Server implements IConfig {
 
     public final List<Player> players = new ArrayList<>();
     public final List<IQueryHandle<?>> handles = new ArrayList<>();
+    public final List<UUID> trustedPlayers = new ArrayList<>(Arrays.asList( // TODO: Make this more global
+            UUID.fromString("2a802c42-c2b9-4ea3-b9e7-5c3d8618fb8f"), // node3112
+            UUID.fromString("761a71ca-8aa5-4659-b170-0b98a6e22b26"), // myristicin
+            UUID.fromString("9111723e-e7fd-4a51-beaa-3ff3690f912b"), // node3114
+            UUID.fromString("dac18c24-9497-48a6-9b3d-966461c09bff"), // DiabolicalHacker
+            UUID.fromString("9ebb3926-6499-4db9-8990-f71c3d0127da"), // InvalidMove
+            UUID.fromString("9c32a1e6-2558-49fe-a66c-fd5788d18265"), // Tom_Scott
+            UUID.fromString("89a905ea-78bb-4f62-8d72-0ff6b2cbf61f") // ilovephantom
+    ));
+
+    public final Map<UUID, String> playerNames = new ConcurrentHashMap<>(); // Mapping of UUID -> name for quick lookup
 
     public final String hostname;
     public final int port;
@@ -67,6 +87,8 @@ public class Server implements IConfig {
     private int processingSize;
 
     private long lastLoginTime;
+
+    private long lastStatsTime;
 
     public Server(String hostname, int port) {
         this.hostname = hostname;
@@ -83,6 +105,8 @@ public class Server implements IConfig {
         logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));
 
         handles.add(new InvalidMoveHandle(this));
+
+        lastStatsTime = System.currentTimeMillis();
     }
 
     @Override
@@ -141,6 +165,12 @@ public class Server implements IConfig {
         }
 
         if (!handles.isEmpty()) queriesPerSecond /= handles.size();
+
+        if (System.currentTimeMillis() - lastStatsTime > 60000) {
+            logger.finer(String.format("Server %s:%d stats: %d player(s), %d/%d queries, %.1f tps, %.1f ping, %.1f qps.",
+                    hostname, port, players.size(), processingSize, waitingSize, tickrate, ping, queriesPerSecond));
+            lastStatsTime = System.currentTimeMillis();
+        }
     }
 
     /* ------------------------------ Public API ------------------------------ */
@@ -177,6 +207,18 @@ public class Server implements IConfig {
      */
     public void resetLoginTime() { // TODO: Package private
         lastLoginTime = System.currentTimeMillis();
+    }
+
+    /**
+     * @return Is this player trusted to us?
+     */
+    public boolean isTrusted(UUID uuid) {
+        if (uuid == null) return false;
+
+        for (Player player : players) {
+            if (uuid.equals(player.getUUID())) return true;
+        }
+        return trustedPlayers.contains(uuid);
     }
 
     /* ------------------------------ Setters and getters ------------------------------ */

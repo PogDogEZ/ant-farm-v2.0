@@ -3,32 +3,31 @@ package ez.pogdog.yescom.core.report.connection;
 import ez.pogdog.yescom.core.connection.Player;
 import ez.pogdog.yescom.core.report.Report;
 
-/**
- * Occurs when an extreme tickrate change is detected.
- */
-public class ExtremeTPSReport extends Report<Float> {
+import java.util.UUID;
+
+public class VisualRangeLogoutReport extends Report<UUID> {
 
     private final Player player;
-    private final float delta;
+    private final UUID uuid;
 
-    public ExtremeTPSReport(Player player, float delta) {
+    public VisualRangeLogoutReport(Player player, UUID uuid) {
         this.player = player;
-        this.delta = delta;
+        this.uuid = uuid;
     }
 
     @Override
     public String getName() {
-        return "Extreme TPS";
+        return "Visual Range Logout";
     }
 
     @Override
     public String getDescription() {
-        return "Occurs when an extreme tickrate change is detected.";
+        return "Occurs when a player logs out due to another player entering their visual range.";
     }
 
     @Override
-    public Float getData() {
-        return delta;
+    public UUID getData() {
+        return uuid;
     }
 
     @Override

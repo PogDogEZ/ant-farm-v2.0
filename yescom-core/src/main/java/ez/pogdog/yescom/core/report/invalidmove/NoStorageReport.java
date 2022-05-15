@@ -1,12 +1,12 @@
 package ez.pogdog.yescom.core.report.invalidmove;
 
 import ez.pogdog.yescom.core.connection.Player;
-import ez.pogdog.yescom.core.report.IReport;
+import ez.pogdog.yescom.core.report.Report;
 
 /**
  * No usable storage was found.
  */
-public class NoStorageReport implements IReport<Object> {
+public class NoStorageReport extends Report<Object> {
 
     private final Player player;
 

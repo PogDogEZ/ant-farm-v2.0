@@ -266,7 +266,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                         }
                     }
 
-                    if (bestStorage == null) {
+                    if (bestStorage == null) { // FIXME: Doesn't log if there are no storages at all
                         logger.warning(String.format("%s (%s:%d) cannot find a valid storage.", player.getUsername(),
                                 server.hostname, server.port));
                         Emitters.ON_REPORT.emit(new NoStorageReport(player));
