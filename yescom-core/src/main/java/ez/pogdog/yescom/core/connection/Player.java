@@ -481,7 +481,7 @@ public class Player implements IConfig {
                         lastWorldTicks = packet.getWorldAge();
                     } else {
                         float newTPS = (packet.getWorldAge() - lastWorldTicks) / ((System.currentTimeMillis() - lastTimeUpdate) / 1000.0f);
-                        if (!Float.isFinite(newTPS)) return; // Damn
+                        if (newTPS <= 0.0f || newTPS >= 1000.0f || !Float.isFinite(newTPS)) return; // Damn
 
                         tickValues.add(newTPS);
                         while (tickValues.size() > 5) tickValues.remove(0);
