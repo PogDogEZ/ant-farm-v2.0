@@ -23,7 +23,7 @@ public class AccountHandler {
 
     private final List<IAccount> accounts = new ArrayList<>();
     private final Pattern accountPattern = Pattern.compile(
-            "((?<type>(mojang|microsoft))( *):)?( *)(?<email>[A-Za-z0-9_.]+@([A-Za-z]+.[A-Za-z]+)+)( *):( *)(?<password>.+)"
+            "((?<type>(mojang|microsoft))( *):)?( *)(?<email>\\w+@(\\w+\\.\\w+)+)( *):( *)(?<password>\\w+)"
     );
 
     private final String accountsFile;

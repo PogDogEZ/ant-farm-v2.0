@@ -38,8 +38,9 @@ import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
 import ez.pogdog.yescom.core.report.connection.ExtremeTPSReport;
-import ez.pogdog.yescom.core.report.connection.HealthLogoutReport;
-import ez.pogdog.yescom.core.report.connection.VisualRangeLogoutReport;
+import ez.pogdog.yescom.core.report.player.DeadReport;
+import ez.pogdog.yescom.core.report.player.HealthLogoutReport;
+import ez.pogdog.yescom.core.report.player.VisualRangeLogoutReport;
 import ez.pogdog.yescom.core.util.Chat;
 
 import java.util.ArrayList;
@@ -442,7 +443,12 @@ public class Player implements IConfig {
                     hunger = packet.getFood();
                     saturation = packet.getSaturation();
 
-                    if (health <= LOGOUT_HEALTH.value) {
+                    if (health <= 0.0f) {
+                        disconnect("Dead.");
+                        Emitters.ON_REPORT.emit(new DeadReport(Player.this));
+                        AUTO_RECONNECT.value = false;
+
+                    } else if (health <= LOGOUT_HEALTH.value) {
                         disconnect(String.format("Low health (%.1f).", health));
                         Emitters.ON_REPORT.emit(new HealthLogoutReport(Player.this, health));
                         lastAutoLogoutTime = System.currentTimeMillis();

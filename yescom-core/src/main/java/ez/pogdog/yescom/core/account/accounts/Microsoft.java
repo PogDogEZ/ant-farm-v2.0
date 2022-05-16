@@ -44,12 +44,25 @@ public class Microsoft implements IAccount {
     @SuppressWarnings("unchecked")
     public void login(AuthenticationService authService) throws RequestException {
         if (authService.getUsername() == null) {
+            String[] emailSplit = email.split("@");
+            String email = String.valueOf(emailSplit[0].charAt(0));
+            email += emailSplit[0].substring(1, emailSplit[0].length() - 1).replaceAll("\\w", "*");
+            email += String.valueOf(emailSplit[0].charAt(emailSplit[0].length() - 1));
+            if (emailSplit.length > 1) email += emailSplit[1];
+            logger.fine(String.format("Authenticating Microsoft account %s.", email));
+
             try {
-                String code = Code.getInitialCode(email, password, String.valueOf(UUID.randomUUID()));
+                logger.finest("Obtaining intial code...");
+                String code = Code.getInitialCode(this.email, password, String.valueOf(UUID.randomUUID()));
+                logger.finest("Getting MS token user pass...");
                 MSToken.TokenPair msToken = MSToken.getForUserPass(code);
+                logger.finest("Getting XBL token user pass...");
                 XBLToken.XBLTokenType xblToken = XBLToken.getForUserPass(msToken.token);
+                logger.finest("Getting LS token...");
                 LSToken.LSTokenType lsToken = LSToken.getFor(xblToken.token);
+                logger.finest("Getting MC token...");
                 MCToken.MCTokenType minecraftToken = MCToken.getFor(lsToken);
+                logger.finest("Getting user profile...");
                 MCToken.Profile profile = MCToken.getProfile(minecraftToken);
 
                 GameProfile gameProfile = new GameProfile(
@@ -77,6 +90,8 @@ public class Microsoft implements IAccount {
                 Field selectedProfileField = AuthenticationService.class.getDeclaredField("selectedProfile");
                 selectedProfileField.setAccessible(true);
                 selectedProfileField.set(authService, gameProfile);
+
+                logger.finest("Authenticated.");
 
             } catch (Exception error) {
                 logger.throwing(Microsoft.class.getSimpleName(), "login", error);

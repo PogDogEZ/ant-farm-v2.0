@@ -1,4 +1,4 @@
-package ez.pogdog.yescom.core.report.connection;
+package ez.pogdog.yescom.core.report.player;
 
 import ez.pogdog.yescom.core.connection.Player;
 import ez.pogdog.yescom.core.report.Report;

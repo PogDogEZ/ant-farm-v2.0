@@ -9,6 +9,7 @@ import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
 import ez.pogdog.yescom.core.query.IQuery;
 import ez.pogdog.yescom.core.query.IQueryHandle;
+import ez.pogdog.yescom.core.query.IsLoadedQuery;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
 
 import java.util.ArrayList;
@@ -79,7 +80,7 @@ public class Server implements IConfig {
     /* ------------------------------ Other fields ------------------------------ */
 
     public final List<Player> players = new ArrayList<>();
-    public final List<IQueryHandle<?>> handles = new ArrayList<>();
+    public final List<IQueryHandle<?>> handles = new ArrayList<>(); // TODO: More specific for loaded queries
 
     public final String hostname;
     public final int port;
