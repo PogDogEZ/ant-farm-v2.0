@@ -98,7 +98,7 @@ public class ConfigHandler {
                 this.values.put(configuration.getFullIdentifier(), values);
             }
 
-            logger.finer(String.format("Saved %d options from %d configurations.", options, configurations.size()));
+            logger.finer(String.format("Saved %d option(s) from %d configuration(s).", options, configurations.size()));
         }
     }
 
@@ -131,7 +131,7 @@ public class ConfigHandler {
 
             Map<String, Object> values = this.values.get(configuration.getFullIdentifier());
             if (values != null) {
-                logger.finer(String.format("Populating %d values for configuration %s.", values.size(), configuration.getFullIdentifier()));
+                logger.finer(String.format("Populating %d value(s) for configuration %s.", values.size(), configuration.getFullIdentifier()));
                 for (Option option : configuration.getOptions(true)) option.value = values.get(option.name);
                 values.clear();
             } else {

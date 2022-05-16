@@ -2,6 +2,8 @@ package ez.pogdog.yescom.ui;
 
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
+import jep.Interpreter;
+import jep.SharedInterpreter;
 
 import java.util.logging.Logger;
 
@@ -14,6 +16,9 @@ public class Main {
 
         // Python should be bootstrapped at this point, and YesCom should be running
         logger.info("Starting YesCom UI...");
-        // YesCom.getInstance().python.exec("from yescom.ui import main");
+
+        Interpreter interpreter = new SharedInterpreter();
+        interpreter.exec("from yescom.ui import main");
+        interpreter.invoke("main");
     }
 }

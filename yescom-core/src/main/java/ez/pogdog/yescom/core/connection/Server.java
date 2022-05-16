@@ -217,6 +217,14 @@ public class Server implements IConfig {
     }
 
     /**
+     * Disconnects all online players.
+     * @param reason The reason for the disconnect.
+     */
+    public void disconnectAll(String reason) {
+        for (Player player : players) player.disconnect(reason);
+    }
+
+    /**
      * @return Can players currently log into this server? (Based on {@link #GLOBAL_LOGIN_TIME}).
      */
     public boolean canLogin() {

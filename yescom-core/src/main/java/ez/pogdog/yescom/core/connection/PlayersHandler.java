@@ -5,7 +5,6 @@ import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Handles stuff to do with players (trusted, UUID to name maps).
@@ -33,7 +32,7 @@ public class PlayersHandler implements IConfig {
     public final Option<Map<UUID, String>> PLAYER_NAMES = new Option<>(
             "Player names",
             "Map of UUIDs to names.",
-            new ConcurrentHashMap<>()
+            new HashMap<>()
     );
 
     @Override

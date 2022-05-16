@@ -1,12 +1,17 @@
 package ez.pogdog.yescom;
 
 import ez.pogdog.yescom.api.Logging;
+import ez.pogdog.yescom.api.data.ChunkPosition;
+import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.account.AccountHandler;
 import ez.pogdog.yescom.core.config.ConfigHandler;
 import ez.pogdog.yescom.core.config.IConfig;
+import ez.pogdog.yescom.core.connection.PlayersHandler;
 import ez.pogdog.yescom.core.connection.Server;
+import ez.pogdog.yescom.core.query.IsLoadedQuery;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
+import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveQuery;
 import jep.Interpreter;
 import jep.MainInterpreter;
 import jep.PyConfig;
@@ -91,7 +96,7 @@ public class YesCom extends Thread implements IConfig {
         }
 
         try {
-            instance = new YesCom(
+            new YesCom(
                     accountsFile == null ? "accounts.txt" : accountsFile,
                     configDirectory == null ? "config" : configDirectory
             );
@@ -129,38 +134,49 @@ public class YesCom extends Thread implements IConfig {
 
     public final AccountHandler accountHandler;
     public final ConfigHandler configHandler;
+    public final PlayersHandler playersHandler;
 
-    // public final Interpreter python;
+    public /* final */ Interpreter python;
+
+    private final String jarPath;
 
     private boolean running;
 
     public YesCom(String accountsFile, String configDirectory) throws Exception {
+        instance = this;
+
         setName("yescom-main-thread");
 
         logger.fine("Locating jar...");
-        String jarPath = findJar();
+        jarPath = findJar();
         logger.fine(String.format("Found jar at %s.", jarPath));
 
         // servers.add(new Server("constantiam.net", 25565)); // :p
         accountHandler = new AccountHandler(accountsFile);
         configHandler = new ConfigHandler(configDirectory);
-        configHandler.addConfiguration(this);
+        playersHandler = new PlayersHandler();
 
-        /*
+        configHandler.addConfiguration(this);
+        configHandler.addConfiguration(playersHandler);
+
         logger.fine("Bootstrapping jep...");
         PyConfig config = new PyConfig();
         MainInterpreter.setInitParams(config);
 
-        python = new SharedInterpreter();
-        python.exec("from sys import path"); // Bruh
-        python.invoke("path.append", jarPath);
-         */
-
         start();
+
+        try {
+            Thread.sleep(50); // Wait for the interpreter to start
+        } catch (InterruptedException ignored) {
+        }
     }
 
     @Override
     public void run() {
+        python = new SharedInterpreter();
+        python.exec("from sys import path"); // Bruh
+        python.invoke("path.append", jarPath);
+
         running = true;
         while (running) {
             long start = System.currentTimeMillis();
@@ -229,5 +245,7 @@ public class YesCom extends Thread implements IConfig {
     public void shutdown() {
         logger.info("Shutting down YesCom \ud83d\udc7f...");
         running = false;
+
+        for (Server server : servers) server.disconnectAll("Shutting down");
     }
 }
