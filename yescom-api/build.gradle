@@ -1,5 +1,13 @@
 apply plugin: "java"
 
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation group: "org.json", name: "json", version: "20220320"
+}
+
 jar {
     baseName = "yescom"
     classifier = "api"

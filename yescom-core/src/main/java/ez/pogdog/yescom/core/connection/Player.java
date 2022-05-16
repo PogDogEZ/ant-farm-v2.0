@@ -84,7 +84,7 @@ public class Player implements IConfig {
     private final Server server;
     private final IAccount account;
 
-    private final AuthenticationService authService;
+    private AuthenticationService authService;
     private Session session;
 
     /* ------------------------------ Player "stats" ------------------------------ */
@@ -111,8 +111,12 @@ public class Player implements IConfig {
 
     private final List<Float> tickValues = new ArrayList<>();
 
+    private UUID uuid = null;
+    private String username = "<unknown>";
+
     private long lastLoginTime;
     private long lastAutoLogoutTime;
+    private int failedLogins;
     private int failedConnections;
 
     private boolean positionDirty;
@@ -138,6 +142,7 @@ public class Player implements IConfig {
 
         lastLoginTime = System.currentTimeMillis() - this.server.AUTO_RECONNECT_TIME.value;
         lastAutoLogoutTime = System.currentTimeMillis() - this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
+        failedLogins = 0;
         failedConnections = 0;
 
         positionDirty = false;
@@ -199,7 +204,22 @@ public class Player implements IConfig {
 
             try {
                 logger.fine(String.format("Connecting %s to %s:%d...", getUsername(), server.hostname, server.port));
-                account.login(authService);
+                try {
+                    account.login(authService);
+                } catch (RequestException error) {
+                    logger.finer(String.format("%s login failed, refreshing auth service.", getUsername()));
+                    authService = new AuthenticationService();
+
+                    if (++failedLogins > server.MAX_FAILED_LOGIN_ATTEMPTS.value) {
+                        logger.warning(String.format("%s has %d failed login attempts, disabling auto reconnect.",
+                                getUsername(), failedLogins));
+                        // TODO: Report
+                        AUTO_RECONNECT.value = false;
+                    }
+
+                    throw error;
+                }
+                failedLogins = 0;
 
                 MinecraftProtocol protocol = new MinecraftProtocol(authService.getSelectedProfile(), authService.getAccessToken());
                 Client client = new Client(server.hostname, server.port, protocol, new TcpSessionFactory(null));
@@ -263,11 +283,13 @@ public class Player implements IConfig {
     }
 
     public UUID getUUID() {
-        return authService.getSelectedProfile().getId();
+        if (authService.getSelectedProfile() != null) uuid = authService.getSelectedProfile().getId();
+        return uuid;
     }
 
     public String getUsername() {
-        return authService.getSelectedProfile() == null ? "<not logged in>" : authService.getSelectedProfile().getName();
+        if (authService.getSelectedProfile() != null) username = authService.getSelectedProfile().getName();
+        return username;
     }
 
     public Position getPosition() {

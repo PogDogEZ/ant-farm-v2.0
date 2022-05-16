@@ -57,6 +57,11 @@ public class Server implements IConfig {
             "How long to wait before reconnecting a player after an automatic logout.",
             120000
     );
+    public final Option<Integer> MAX_FAILED_LOGIN_ATTEMPTS = new Option<>(
+            "Max failed login attempts",
+            "The maximum number of failed login attempts before disabling auto reconnect.",
+            5
+    );
 
     public final Option<Double> EXTREME_TPS_CHANGE = new Option<>( // These have to be doubles unfortunately, for YAML and Python :(
             "Extreme TPS change",
