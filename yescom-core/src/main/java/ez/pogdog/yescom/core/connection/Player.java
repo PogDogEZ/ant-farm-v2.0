@@ -82,8 +82,8 @@ public class Player implements IConfig {
 
     /* ------------------------------ Other fields ------------------------------ */
 
-    private final Server server;
-    private final IAccount account;
+    public final Server server;
+    public final IAccount account;
 
     private AuthenticationService authService;
     private Session session;
@@ -95,6 +95,9 @@ public class Player implements IConfig {
     private final Position position = new Position(0.0, 0.0, 0.0);
     private final Angle angle = new Angle(0.0f, 0.0f);
     private boolean onGround = true;
+
+    private Position oldPosition;
+    private Angle oldAngle;
 
     private int currentTeleportID = -1;
     private int currentWindowID = -1;
@@ -138,8 +141,12 @@ public class Player implements IConfig {
         authService = new AuthenticationService();
         session = null;
 
-        this.account.login(authService);
+        yesCom.accountHandler.login(this.account, authService);
+        // this.account.login(authService);
         yesCom.configHandler.addConfiguration(this);
+
+        oldPosition = position.clone();
+        oldAngle = angle.clone();
 
         lastLoginTime = System.currentTimeMillis() - this.server.AUTO_RECONNECT_TIME.value;
         lastAutoLogoutTime = System.currentTimeMillis() - this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
@@ -191,6 +198,11 @@ public class Player implements IConfig {
             }
 
             if (isSpawned()) failedConnections = 0;
+            if (!oldPosition.equals(position) || !oldAngle.equals(angle)) {
+                Emitters.ON_PLAYER_POSITION_UPDATE.emit(this);
+                oldPosition = position.clone();
+                oldAngle = angle.clone();
+            }
         }
     }
 
@@ -205,9 +217,15 @@ public class Player implements IConfig {
 
             try {
                 logger.fine(String.format("Connecting %s to %s:%d...", getUsername(), server.hostname, server.port));
+                boolean firstTime = yesCom.accountHandler.isFirstTime(account);
                 try {
-                    account.login(authService);
+                    yesCom.accountHandler.login(account, authService);
                 } catch (RequestException error) {
+                    if (firstTime) {
+                        server.removePlayer(this); // Account is unusable, this isn't a valid player
+                        return;
+                    }
+
                     logger.finer(String.format("%s login failed, refreshing auth service.", getUsername()));
                     authService = new AuthenticationService();
 
@@ -264,10 +282,6 @@ public class Player implements IConfig {
     }
 
     /* ------------------------------ Setters and getters ------------------------------ */
-
-    public IAccount getAccount() {
-        return account;
-    }
 
     /**
      * @return Is this player connected to the server?
@@ -406,7 +420,7 @@ public class Player implements IConfig {
     private class SessionReactionAdapter extends SessionAdapter {
         @Override
         public void packetReceived(PacketReceivedEvent event) {
-            Emitters.ON_PACKET_IN.emit(new Emitters.PlayerPacket(Player.this, event.getPacket()));
+            Emitters.ON_PLAYER_PACKET_IN.emit(new Emitters.PlayerPacket(Player.this, event.getPacket()));
 
             // Paper has async chat
             if (!(event.getPacket() instanceof ServerChatPacket)) {
@@ -439,6 +453,9 @@ public class Player implements IConfig {
                 } else if (event.getPacket() instanceof ServerPlayerHealthPacket) {
                     ServerPlayerHealthPacket packet = event.getPacket();
 
+                    if (health != packet.getHealth() || hunger != packet.getFood() || saturation != packet.getSaturation())
+                        Emitters.ON_PLAYER_HEALTH_UPDATE.emit(Player.this);
+
                     health = packet.getHealth();
                     hunger = packet.getFood();
                     saturation = packet.getSaturation();
@@ -461,9 +478,11 @@ public class Player implements IConfig {
 
                 } else if (event.getPacket() instanceof ServerJoinGamePacket) {
                     dimension = Dimension.fromMC(((ServerJoinGamePacket)event.getPacket()).getDimension());
+                    Emitters.ON_PLAYER_POSITION_UPDATE.emit(Player.this);
 
                 } else if (event.getPacket() instanceof ServerRespawnPacket) {
                     dimension = Dimension.fromMC(((ServerRespawnPacket)event.getPacket()).getDimension());
+                    Emitters.ON_PLAYER_POSITION_UPDATE.emit(Player.this);
 
                 } else if (event.getPacket() instanceof ServerPlayerListEntryPacket) {
                     ServerPlayerListEntryPacket packet = event.getPacket();
@@ -475,6 +494,7 @@ public class Player implements IConfig {
                         if (entry.getProfile().getId().equals(getUUID())) {
                             serverPing = entry.getPing();
                             logger.finer(String.format("%s server ping is %dms.", getUsername(), serverPing));
+                            Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
                             break;
                         }
                     }
@@ -506,6 +526,7 @@ public class Player implements IConfig {
                                     old, serverTPS));
                             Emitters.ON_REPORT.emit(new ExtremeTPSReport(Player.this, old));
                         }
+                        Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
                     }
 
                 } else if (event.getPacket() instanceof ServerOpenWindowPacket) {
@@ -530,9 +551,13 @@ public class Player implements IConfig {
                     ServerChunkDataPacket packet = event.getPacket();
                     loadedChunks.add(new ChunkPosition(packet.getColumn().getX(), packet.getColumn().getZ()));
 
+                    Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
+
                 } else if (event.getPacket() instanceof ServerUnloadChunkPacket) {
                     ServerUnloadChunkPacket packet = event.getPacket();
                     loadedChunks.remove(new ChunkPosition(packet.getX(), packet.getZ()));
+
+                    Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
 
                 } else if (event.getPacket() instanceof ServerSpawnPlayerPacket) {
                     ServerSpawnPlayerPacket packet = event.getPacket();
@@ -555,13 +580,13 @@ public class Player implements IConfig {
 
         @Override
         public void packetSent(PacketSentEvent event) {
-            Emitters.ON_PACKET_OUT.emit(new Emitters.PlayerPacket(Player.this, event.getPacket()));
+            Emitters.ON_PLAYER_PACKET_OUT.emit(new Emitters.PlayerPacket(Player.this, event.getPacket()));
         }
 
         @Override
         public void connected(ConnectedEvent event) {
             logger.info(String.format("%s was successfully connected to %s:%d.", getUsername(), server.hostname, server.port));
-            Emitters.ON_LOGIN.emit(Player.this);
+            Emitters.ON_PLAYER_LOGIN.emit(Player.this);
         }
 
         @Override
@@ -572,7 +597,7 @@ public class Player implements IConfig {
             }
 
             logger.info(String.format("%s was disconnected for: %s", getUsername(), event.getReason()));
-            Emitters.ON_LOGOUT.emit(new Emitters.PlayerLogout(Player.this, event.getReason()));
+            Emitters.ON_PLAYER_LOGOUT.emit(new Emitters.PlayerLogout(Player.this, event.getReason()));
 
             lastLoginTime = System.currentTimeMillis();
             if (!isSpawned()) {

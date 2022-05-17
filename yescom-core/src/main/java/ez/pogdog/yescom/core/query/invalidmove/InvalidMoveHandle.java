@@ -101,13 +101,13 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         this.server = server;
         yesCom.configHandler.addConfiguration(this);
 
-        for (Player player : this.server.players) available.put(player, new PlayerHandle(player));
+        for (Player player : this.server.getPlayers()) available.put(player, new PlayerHandle(player));
         logger.finer(String.format("%d player(s) available.", available.size()));
 
         logger.finer("Connecting emitters...");
-        Emitters.ON_LOGIN.connect(this::onLogin);
-        Emitters.ON_PACKET_IN.connect(this::onPacketIn);
-        Emitters.ON_LOGOUT.connect(this::onLogout);
+        Emitters.ON_PLAYER_LOGIN.connect(this::onLogin);
+        Emitters.ON_PLAYER_PACKET_IN.connect(this::onPacketIn);
+        Emitters.ON_PLAYER_LOGOUT.connect(this::onLogout);
     }
 
     @Override
@@ -189,14 +189,14 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     }
 
     private void onPacketIn(Emitters.PlayerPacket playerPacket) {
-        if (available.containsKey(playerPacket.getPlayer()))
-            available.get(playerPacket.getPlayer()).onPacketIn(playerPacket.getPacket());
+        if (available.containsKey(playerPacket.player))
+            available.get(playerPacket.player).onPacketIn(playerPacket.packet);
     }
 
     private void onLogout(Emitters.PlayerLogout playerLogout) {
-        if (available.containsKey(playerLogout.getPlayer())) {
-            PlayerHandle playerHandle = available.get(playerLogout.getPlayer());
-            available.remove(playerLogout.getPlayer());
+        if (available.containsKey(playerLogout.player)) {
+            PlayerHandle playerHandle = available.get(playerLogout.player);
+            available.remove(playerLogout.player);
             playerHandle.onLogout();
         }
     }

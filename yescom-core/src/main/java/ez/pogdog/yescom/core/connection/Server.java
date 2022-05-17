@@ -9,15 +9,12 @@ import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
 import ez.pogdog.yescom.core.query.IQuery;
 import ez.pogdog.yescom.core.query.IQueryHandle;
-import ez.pogdog.yescom.core.query.IsLoadedQuery;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -79,13 +76,14 @@ public class Server implements IConfig {
 
     /* ------------------------------ Other fields ------------------------------ */
 
-    public final List<Player> players = new ArrayList<>();
     public final List<IQueryHandle<?>> handles = new ArrayList<>(); // TODO: More specific for loaded queries
 
     public final String hostname;
     public final int port;
 
     public final InvalidMoveHandle invalidMoveHandle; // Direct reference for ease, it's hacky but who cares
+
+    private final List<Player> players = new CopyOnWriteArrayList<>();
 
     private float tickrate;
     private float tslp;
@@ -112,13 +110,7 @@ public class Server implements IConfig {
         lastLoginTime = System.currentTimeMillis() - GLOBAL_LOGIN_TIME.value;
         lastStatsTime = System.currentTimeMillis();
 
-        Emitters.ON_ACCOUNT_ADDED.connect(this::onAccountAdded);
-        List<IAccount> accounts = yesCom.accountHandler.getAccounts();
-        if (!accounts.isEmpty()) {
-            logger.finer(String.format("Adding %d account(s) to %s:%d...", accounts.size(), hostname, port));
-            for (IAccount account : accounts) onAccountAdded(account);
-        }
-        logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));
+        // Emitters.ON_ACCOUNT_ADDED.connect(this::onAccountAdded);
     }
 
     @Override
@@ -139,29 +131,28 @@ public class Server implements IConfig {
 
     /* ------------------------------ Events ------------------------------ */
 
-    private void onAccountAdded(IAccount account) {
-        for (Player player : players) {
-            if (player.getAccount().equals(account)) return;
-        }
-
-        try {
-            players.add(new Player(this, account));
-        } catch (RequestException error) {
-            logger.warning(String.format("Failed to add account %s to %s:%d: %s.", account, hostname, port, error.getMessage()));
-            logger.throwing(getClass().getSimpleName(), "onAccountAdded", error);
-        }
-    }
-
-	/*
-	private void onAccountRemoved(IAccount account) {
-
-	}
-	 */
-
     /**
      * Ticks this server.
      */
     public void tick() {
+        List<IAccount> accounts = yesCom.accountHandler.getAccounts();
+        if (!accounts.isEmpty()) {
+            // logger.finer(String.format("Adding %d account(s) to %s:%d...", accounts.size(), hostname, port));
+            outer: for (IAccount account : accounts) {
+                for (Player player : players) {
+                    if (player.account.equals(account)) continue outer;
+                }
+
+                try {
+                    addPlayer(new Player(this, account));
+                } catch (RequestException error) {
+                    logger.warning(String.format("Failed to add account %s to %s:%d: %s.", account, hostname, port, error.getMessage()));
+                    logger.throwing(getClass().getSimpleName(), "onAccountAdded", error);
+                }
+            }
+        }
+        // logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));
+
         tickrate = 0.0f;
         tslp = 0.0f;
         ping = 0.0f;
@@ -219,6 +210,39 @@ public class Server implements IConfig {
     public void cancel(IQuery<?> query) {
         for (IQueryHandle handle : handles) {
             if (handle.handles(query)) handle.cancel(query);
+        }
+    }
+
+    /**
+     * @return All the {@link Player}s (that we own) connected to this server.
+     */
+    public List<Player> getPlayers() {
+        return new ArrayList<>(players);
+    }
+
+    public int getPlayerCount() {
+        return players.size();
+    }
+
+    /**
+     * Adds a player to this server.
+     * @param player The player to add.
+     */
+    public void addPlayer(Player player) {
+        if (!players.contains(player) && player.server == this) {
+            players.add(player);
+            Emitters.ON_PLAYER_ADDED.emit(player);
+        }
+    }
+
+    /**
+     * Removes a player from this server.
+     * @param player The player to remove.
+     */
+    public void removePlayer(Player player) {
+        if (players.contains(player)) {
+            players.remove(player);
+            Emitters.ON_PLAYER_REMOVED.emit(player);
         }
     }
 

@@ -8,7 +8,8 @@ import com.github.steveice10.mc.auth.service.AuthenticationService;
  */
 public interface IAccount {
     /**
-     * Logs in the account to the auth service.
+     * Logs in the account to the auth service. Use {@link AccountHandler#login(IAccount, AuthenticationService)}
+     * instead of this.
      * @param authService The auth service to log in to.
      */
     void login(AuthenticationService authService) throws RequestException;

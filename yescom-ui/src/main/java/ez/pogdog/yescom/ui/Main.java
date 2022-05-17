@@ -22,6 +22,11 @@ public class Main {
         logger.info("Starting YesCom UI...");
 
         Interpreter interpreter = new SharedInterpreter();
+        interpreter.exec("from sys import path");
+        interpreter.invoke("path.append", YesCom.getInstance().jarPath);
+
+        // YesCom.getInstance().start();
+
         interpreter.exec("from yescom.ui import main");
         interpreter.invoke("main");
     }

@@ -48,7 +48,7 @@ public class Microsoft implements IAccount {
             String email = String.valueOf(emailSplit[0].charAt(0));
             email += emailSplit[0].substring(1, emailSplit[0].length() - 1).replaceAll("\\w", "*");
             email += String.valueOf(emailSplit[0].charAt(emailSplit[0].length() - 1));
-            if (emailSplit.length > 1) email += emailSplit[1];
+            if (emailSplit.length > 1) email += "@" + emailSplit[1];
             logger.fine(String.format("Authenticating Microsoft account %s.", email));
 
             try {

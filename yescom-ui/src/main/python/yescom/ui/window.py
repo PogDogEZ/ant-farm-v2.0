@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from typing import List, Union
+
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -10,6 +12,7 @@ from java.lang import System
 
 from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
+from ez.pogdog.yescom.core.connection import Server
 
 logger = Logging.getLogger("yescom.ui.window")
 
@@ -19,9 +22,47 @@ class MainWindow(QMainWindow):
     The main YesCom window, duh.
     """
 
+    INSTANCE: Union["MainWindow", None] = None
     yescom = YesCom.getInstance()
 
+    # ------------------------------ Signals ------------------------------ #
+
+    server_changed = pyqtSignal()
+
+    account_added = pyqtSignal(object)
+    account_error = pyqtSignal(object)
+
+    player_added = pyqtSignal(object)
+    player_removed = pyqtSignal(object)
+
+    player_login = pyqtSignal(object)
+    player_logout = pyqtSignal(object)
+
+    player_position_update = pyqtSignal(object)
+    player_health_update = pyqtSignal(object)
+    player_server_stats_update = pyqtSignal(object)
+
+    # ------------------------------ Properties ------------------------------ #
+
+    @property
+    def current_server(self) -> Server:
+        """
+        :return: The server the user is currently viewing.
+        """
+
+        return self._current_server
+
+    @current_server.setter
+    def current_server(self, value: Server) -> None:
+        if value != self._current_server:
+            self._current_server = value
+            self.server_changed.emit()
+
     def __init__(self, *args, **kwargs) -> None:
+        if self.__class__.INSTANCE is not None:
+            raise Exception("Duplicate initialisation of MainWindow.")
+        self.__class__.INSTANCE = self
+
         super().__init__(*args, **kwargs)
 
         self.setWindowTitle("YesCom \ud83d\ude08")
@@ -29,9 +70,12 @@ class MainWindow(QMainWindow):
         self.event_thread = MainWindow.EventQueueThread(self)
         self.event_thread.start()
 
+        self._current_server: Union[Server, None] = None
+
         self.central_widget = QWidget(self)
         main_layout = QVBoxLayout(self.central_widget)
 
+        self._setup_signals()
         self._setup_top_bar(main_layout)
         self._setup_tabs(main_layout)
 
@@ -46,6 +90,22 @@ class MainWindow(QMainWindow):
 
         super().closeEvent(event)
 
+    def _setup_signals(self) -> None:
+        # Need to do this cos we want the certain processes to be carried out in the right thread
+
+        emitters.ON_ACCOUNT_ADDED.connect(self.account_added.emit)
+        emitters.ON_ACCOUNT_ERROR.connect(self.account_error.emit)
+
+        emitters.ON_PLAYER_ADDED.connect(self.player_added.emit)
+        emitters.ON_PLAYER_REMOVED.connect(self.player_removed.emit)
+
+        emitters.ON_PLAYER_LOGIN.connect(self.player_login.emit)
+        emitters.ON_PLAYER_LOGOUT.connect(self.player_logout.emit)
+
+        emitters.ON_PLAYER_POSITION_UPDATE.connect(self.player_position_update.emit)
+        emitters.ON_PLAYER_HEALTH_UPDATE.connect(self.player_health_update.emit)
+        emitters.ON_PLAYER_SERVER_STATS_UPDATE.connect(self.player_server_stats_update.emit)
+
     def _setup_top_bar(self, main_layout: QVBoxLayout) -> None:
         layout = QHBoxLayout()
 
@@ -56,6 +116,15 @@ class MainWindow(QMainWindow):
         layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         self.servers_box = QComboBox(self.central_widget)
+
+        if self.yescom.servers:
+            self.current_server = self.yescom.servers[0]
+            for server in self.yescom.servers:
+                self.servers_box.addItem("%s" % server.hostname)
+
+        self.servers_box.insertSeparator(self.servers_box.count())
+        self.servers_box.addItem("Add new server...")
+        self.servers_box.currentTextChanged.connect(self._server_changed)
         layout.addWidget(self.servers_box)
 
         layout.setStretch(1, 3)
@@ -88,6 +157,24 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.options_tab, "Options")
 
         main_layout.addWidget(self.tab_widget)
+
+    # ------------------------------ Events ------------------------------ #
+
+    def _server_changed(self, text: str) -> None:
+        if not text:
+            return
+
+        if text == "Add new server...":  # There's prolly a better way of doing this, I just don't care
+            # TODO: Implement
+            self.current_server = None
+            self.servers_box.setCurrentIndex(-1)
+            return
+        else:
+            for server in self.yescom.servers:
+                if text == server.hostname:
+                    self.current_server = server
+                    logger.fine("Current server: %s" % self._current_server)
+                    return
 
     # ------------------------------ Classes ------------------------------ #
 

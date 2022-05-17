@@ -7,6 +7,7 @@ from PyQt5.QtWidgets import *
 from .window import MainWindow
 from .. import emitters  # Localise emitters
 
+from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
 
 
@@ -26,4 +27,5 @@ def main() -> None:
     main_window = MainWindow()
     main_window.show()
 
+    YesCom.getInstance().start()
     app.exec()
