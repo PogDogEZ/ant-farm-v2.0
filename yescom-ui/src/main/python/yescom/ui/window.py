@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from typing import List, Union
+import time
+from typing import Union
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -26,6 +27,8 @@ class MainWindow(QMainWindow):
     yescom = YesCom.getInstance()
 
     # ------------------------------ Signals ------------------------------ #
+
+    tick = pyqtSignal()
 
     server_changed = pyqtSignal()
 
@@ -156,6 +159,7 @@ class MainWindow(QMainWindow):
         self.options_tab = OptionsTab(self)
         self.tab_widget.addTab(self.options_tab, "Options")
 
+        self.tab_widget.setCurrentIndex(0)
         main_layout.addWidget(self.tab_widget)
 
     # ------------------------------ Events ------------------------------ #
@@ -191,15 +195,22 @@ class MainWindow(QMainWindow):
 
         def run(self) -> None:
             while self.yescom.isRunning():
+                start = time.time()
                 for emitter in emitters.EMITTERS:
                     if not emitter.queuedEvents.isEmpty():
-                        with emitter.synchronized():  # FIXME: Emitter::flush() not working??
-                            while not emitter.queuedEvents.isEmpty():
+                        while not emitter.queuedEvents.isEmpty():
+                            with emitter.synchronized():
                                 object_ = emitter.queuedEvents.remove()
-                                for listener in emitter.pyListeners:
-                                    listener(object_)
+                            # This shouldn't require a lock, right? We barely add listeners throughout
+                            for listener in emitter.pyListeners:
+                                listener(object_)
+                elapsed = (time.time() - start) * 1000
+                if elapsed < 50:
+                    QThread.msleep(50 - int(elapsed))  # Damn
 
-                QThread.msleep(50)  # Damn
+                # Fake tick event, I know, but in fairness the real tick event would also fire here so we might as well
+                # just skip the middle man
+                MainWindow.INSTANCE.tick.emit()
 
 
 from .tabs.accounts import AccountsTab

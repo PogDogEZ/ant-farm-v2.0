@@ -94,7 +94,7 @@ public class Microsoft implements IAccount {
                 logger.finest("Authenticated.");
 
             } catch (Exception error) {
-                logger.throwing(Microsoft.class.getSimpleName(), "login", error);
+                logger.throwing(getClass().getSimpleName(), "login", error);
                 throw new RequestException(error);
             }
         }

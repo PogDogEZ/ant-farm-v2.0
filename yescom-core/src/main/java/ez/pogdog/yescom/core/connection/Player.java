@@ -593,7 +593,7 @@ public class Player implements IConfig {
         public void disconnected(DisconnectedEvent event) {
             if (event.getCause() != null) {
                 logger.warning(event.getReason());
-                logger.throwing(SessionReactionAdapter.class.getSimpleName(), "disconnected", event.getCause());
+                logger.throwing(getClass().getSimpleName(), "disconnected", event.getCause());
             }
 
             logger.info(String.format("%s was disconnected for: %s", getUsername(), event.getReason()));

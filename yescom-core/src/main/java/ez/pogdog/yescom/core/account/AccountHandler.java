@@ -10,9 +10,7 @@ import ez.pogdog.yescom.core.account.accounts.Mojang;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -72,8 +70,8 @@ public class AccountHandler {
 
     /* ------------------------------ Managing accounts ------------------------------ */
 
-    public List<IAccount> getAccounts() {
-        return new ArrayList<>(accounts);
+    public Set<IAccount> getAccounts() {
+        return accounts;
     }
 
     /**
@@ -122,7 +120,7 @@ public class AccountHandler {
             firstTime.remove(account);
 
         } catch (RequestException error) {
-            logger.throwing(AccountHandler.class.getSimpleName(), "login", error);
+            logger.throwing(getClass().getSimpleName(), "login", error);
             // If this is the first time, remove the account
             if (firstTime.contains(account)) {
                 logger.warning("First time account login failed: " + error.getMessage());

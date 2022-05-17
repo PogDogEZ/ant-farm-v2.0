@@ -41,7 +41,6 @@ import java.util.logging.Logger;
 public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfig {
 
     private final Logger logger = Logging.getLogger("yescom.core.query.invalidmove");
-    private final YesCom yesCom = YesCom.getInstance();
 
     /**
      * Valid storages / containers that can be used.
@@ -99,7 +98,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     public InvalidMoveHandle(Server server) {
         logger.fine(String.format("New invalid move handle for server %s:%d.", server.hostname, server.port));
         this.server = server;
-        yesCom.configHandler.addConfiguration(this);
+        YesCom.getInstance().configHandler.addConfiguration(this);
 
         for (Player player : this.server.getPlayers()) available.put(player, new PlayerHandle(player));
         logger.finer(String.format("%d player(s) available.", available.size()));
@@ -137,10 +136,12 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     }
 
     @Override
-    public synchronized void dispatch(InvalidMoveQuery query, Consumer<InvalidMoveQuery> callback) {
+    public void dispatch(InvalidMoveQuery query, Consumer<InvalidMoveQuery> callback) {
         logger.finest("Dispatching query: " + query);
-        callbacks.put(query, callback);
-        waiting.add(query);
+        synchronized (this) {
+            if (callback != null) callbacks.put(query, callback);
+            waiting.add(query);
+        }
     }
 
     @Override
@@ -255,8 +256,8 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                 Emitters.ON_REPORT.emit(new PacketLossReport(player, 6));
 
                 synchronized (this) {
-                    for (InvalidMoveQuery query : loadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, callbacks.get(query));
-                    for (InvalidMoveQuery query : unloadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, callbacks.get(query));
+                    for (InvalidMoveQuery query : loadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
+                    for (InvalidMoveQuery query : unloadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
 
                     loadedQueryMap.clear();
                     unloadedQueryMap.clear();
@@ -269,7 +270,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
             if (player.isSpawned()) {
                 if (bestStorage == null && !confirmedStorages.isEmpty()) {
-                    synchronized (this) {
+                    synchronized (confirmedStorages) {
                         for (BlockPosition storage : new ArrayList<>(confirmedStorages)) {
                             if (player.getPosition().getDistance(storage) > 5) {
                                 confirmedStorages.remove(storage);
@@ -355,17 +356,21 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         /**
          * When this player logs out, we need to handle it correctly.
          */
-        private synchronized void onLogout() {
+        private void onLogout() {
             logger.finer(String.format("Unregistered invalid move handle for player %s.", player.getUsername()));
 
             logger.finer(String.format("Rescheduling %d queries.", loadedQueryMap.size() + unloadedQueryMap.size()));
-            for (InvalidMoveQuery query : loadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, callbacks.get(query));
-            for (InvalidMoveQuery query : unloadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, callbacks.get(query));
+            for (InvalidMoveQuery query : loadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
+            for (InvalidMoveQuery query : unloadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
 
-            confirmedStorages.clear(); // Free memory early
-            loadedQueryMap.clear();
-            unloadedQueryMap.clear();
-            windowToTPIDMap.clear();
+            synchronized (confirmedStorages) {
+                confirmedStorages.clear(); // Free memory early
+            }
+            synchronized (this) {
+                loadedQueryMap.clear();
+                unloadedQueryMap.clear();
+                windowToTPIDMap.clear();
+            }
         }
 
         /**
@@ -375,7 +380,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             if (packet instanceof ServerChunkDataPacket) { // Find storages when we receive chunk data packets
                 ServerChunkDataPacket chunkData = (ServerChunkDataPacket)packet;
 
-                synchronized (this) {
+                synchronized (confirmedStorages) {
                     for (int index = 0; index < chunkData.getColumn().getChunks().length; ++index) {
                         Chunk chunk = chunkData.getColumn().getChunks()[index];
                         if (chunk == null || chunk.isEmpty()) continue;
@@ -411,7 +416,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                 boolean valid = VALID_STORAGES.contains(blockChange.getRecord().getBlock().getId());
                 boolean isCurrent = position.equals(bestStorage);
 
-                synchronized (this) {
+                synchronized (confirmedStorages) {
                     confirmedStorages.remove(position);
 
                     if (isCurrent && !valid) { // When we open the storage, we get this packet sent to us
@@ -425,7 +430,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             } else if (packet instanceof ServerMultiBlockChangePacket) {
                 ServerMultiBlockChangePacket multiBlockChange = (ServerMultiBlockChangePacket)packet;
 
-                synchronized (this) {
+                synchronized (confirmedStorages) {
                     for (BlockChangeRecord record : multiBlockChange.getRecords()) {
                         BlockPosition position = new BlockPosition(
                                 record.getPosition().getX(),
@@ -489,31 +494,29 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             if (packet instanceof ServerOpenWindowPacket) {
                 ServerOpenWindowPacket openWindow = (ServerOpenWindowPacket)packet;
 
-                synchronized (this) {
-                    if (ARZI_MODE.value) {
-                        if (WID_RESYNC.value) {
-                            if (openWindowID >= 0 || gotBlockState || closeWindowID >= 0) { // We've been waiting for another teleport
-                                logger.warning(String.format("%s packet loss (2) open: %d, new: %d, packets: %d.",
-                                        player.getUsername(), openWindowID, openWindow.getWindowId(), packetsElapsed));
-                                Emitters.ON_REPORT.emit(new PacketLossReport(player, 2));
+                if (ARZI_MODE.value) {
+                    if (WID_RESYNC.value) {
+                        if (openWindowID >= 0 || gotBlockState || closeWindowID >= 0) { // We've been waiting for another teleport
+                            logger.warning(String.format("%s packet loss (2) open: %d, new: %d, packets: %d.",
+                                    player.getUsername(), openWindowID, openWindow.getWindowId(), packetsElapsed));
+                            Emitters.ON_REPORT.emit(new PacketLossReport(player, 2));
 
-                                // TODO: Resync
-                            }
-
-                            // Expect to get a ServerWindowItemsPacket immediately after and a ServerSetSlotPacket with ID 255
-                            packetsElapsed = -2;
-                            // We'll record the elapsed ticks from the first indication that we're listening to a query response
-                            // (this packet)
-                            openWindowID = openWindow.getWindowId();
+                            // TODO: Resync
                         }
 
-                        // Recorded regardless of WID_RESYNC as it can still be used to measure server statistics
-                        ticksElapsed = 0;
-
-                    } else {
-                        storageOpen = true;
-                        openingStorage = false; // We aren't opening it right now
+                        // Expect to get a ServerWindowItemsPacket immediately after and a ServerSetSlotPacket with ID 255
+                        packetsElapsed = -2;
+                        // We'll record the elapsed ticks from the first indication that we're listening to a query response
+                        // (this packet)
+                        openWindowID = openWindow.getWindowId();
                     }
+
+                    // Recorded regardless of WID_RESYNC as it can still be used to measure server statistics
+                    ticksElapsed = 0;
+
+                } else {
+                    storageOpen = true;
+                    openingStorage = false; // We aren't opening it right now
                 }
 
             } else if (packet instanceof ServerWindowPropertyPacket) {
@@ -536,10 +539,8 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                     );
 
                     if (position.equals(bestStorage)) {
-                        synchronized (this) {
-                            packetsElapsed = -1; // Server sends two, one offset based on the face
-                            gotBlockState = true;
-                        }
+                        packetsElapsed = -1; // Server sends two, one offset based on the face
+                        gotBlockState = true;
                     }
                 }
 
@@ -550,11 +551,9 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                 // ^ could be solved by ignoring the state when dispatching queries, and setting it purely based on packets
                 // though would require a lot more fields to track :(
 
-                synchronized (this) {
-                    packetsElapsed = 0;
-                    ticksElapsed = 0;
-                    closeWindowID = closeWindow.getWindowId();
-                }
+                packetsElapsed = 0;
+                ticksElapsed = 0;
+                closeWindowID = closeWindow.getWindowId();
 
             } else if (packet instanceof ServerPlayerPositionRotationPacket) {
                 ServerPlayerPositionRotationPacket positionRotation = (ServerPlayerPositionRotationPacket)packet;
@@ -658,9 +657,9 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                                 openStorage();
 
                                 for (InvalidMoveQuery query0 : loadedQueryMap.values())
-                                    InvalidMoveHandle.this.dispatch(query0, callbacks.get(query0));
+                                    InvalidMoveHandle.this.dispatch(query0, null);
                                 for (InvalidMoveQuery query0 : unloadedQueryMap.values())
-                                    InvalidMoveHandle.this.dispatch(query0, callbacks.get(query0));
+                                    InvalidMoveHandle.this.dispatch(query0, null);
                                 loadedQueryMap.clear();
                                 unloadedQueryMap.clear();
                             }
@@ -677,9 +676,9 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                             player.send(new ClientTeleportConfirmPacket(positionRotation.getTeleportId()));
 
                             for (InvalidMoveQuery query0 : loadedQueryMap.values())
-                                InvalidMoveHandle.this.dispatch(query0, callbacks.get(query0));
+                                InvalidMoveHandle.this.dispatch(query0, null);
                             for (InvalidMoveQuery query0 : unloadedQueryMap.values())
-                                InvalidMoveHandle.this.dispatch(query0, callbacks.get(query0));
+                                InvalidMoveHandle.this.dispatch(query0, null);
                             loadedQueryMap.clear();
                             unloadedQueryMap.clear();
 
@@ -713,13 +712,11 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
                 // TODO: Re-align mappings
 
-                synchronized (this) {
-                    packetsElapsed = 0;
-                    ticksElapsed = 0;
-                    openWindowID = -1;
-                    gotBlockState = false;
-                    closeWindowID = -1;
-                }
+                packetsElapsed = 0;
+                ticksElapsed = 0;
+                openWindowID = -1;
+                gotBlockState = false;
+                closeWindowID = -1;
 
             // Expect within ~4 server ticks
             } else if (openWindowID >= 0 && /* packetsElapsed > 5 && */ packetsElapsed > 2 &&
@@ -824,7 +821,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         public void dispatch(InvalidMoveQuery query) {
             // Not sure why this would happen, but better safe than sorry
             if (bestStorage == null || query.dimension != player.getDimension()) {
-                InvalidMoveHandle.this.dispatch(query, callbacks.get(query));
+                InvalidMoveHandle.this.dispatch(query, null);
                 return;
             }
 

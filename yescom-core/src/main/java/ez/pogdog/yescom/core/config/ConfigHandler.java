@@ -18,12 +18,20 @@ public class ConfigHandler {
     private final List<IConfig> configurations = new ArrayList<>();
     private final Map<String, Map<String, Object>> values = new HashMap<>();
 
+    private final Yaml yaml;
+
     private final String configDirectory;
 
     private long lastAutoSaveTime;
 
     public ConfigHandler(String configDirectory) {
         this.configDirectory = configDirectory;
+
+        DumperOptions dumperOptions = new DumperOptions();
+        dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.FLOW); // Looks nicer imo
+        dumperOptions.setPrettyFlow(true);
+
+        yaml = new Yaml(dumperOptions);
 
         try {
             readConfiguration();
@@ -39,12 +47,6 @@ public class ConfigHandler {
         logger.fine("Reading configurations...");
         File configDirectory = new File(this.configDirectory);
         if (!configDirectory.exists() && !configDirectory.mkdirs()) throw new IOException("Could not create config directory.");
-
-        DumperOptions dumperOptions = new DumperOptions();
-        dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.FLOW); // Looks nicer imo
-        dumperOptions.setPrettyFlow(true);
-
-        Yaml yaml = new Yaml(dumperOptions);
 
         File[] files = configDirectory.listFiles();
         if (files != null) {
@@ -73,15 +75,10 @@ public class ConfigHandler {
         File configDirectory = new File(this.configDirectory);
         if (!configDirectory.exists() && !configDirectory.mkdirs()) throw new IOException("Could not create config directory.");
 
-        DumperOptions dumperOptions = new DumperOptions();
-        dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.FLOW); // Looks nicer imo
-        dumperOptions.setPrettyFlow(true);
-
-        Yaml yaml = new Yaml(dumperOptions);
-
         synchronized (this) {
             values.clear();
 
+            long start = System.currentTimeMillis();
             int options = 0;
             for (IConfig configuration : configurations) {
                 Map<String, Object> values = new HashMap<>();
@@ -98,20 +95,21 @@ public class ConfigHandler {
                 this.values.put(configuration.getFullIdentifier(), values);
             }
 
-            logger.finer(String.format("Saved %d option(s) from %d configuration(s).", options, configurations.size()));
+            logger.finer(String.format("Saved %d option(s) from %d configuration(s) in %dms.", options,
+                    configurations.size(), System.currentTimeMillis() - start));
         }
     }
 
     public void tick() {
         if (System.currentTimeMillis() - lastAutoSaveTime > 120000) {
-            new Thread(() -> {
-                try {
-                    saveConfiguration();
-                } catch (IOException error) {
-                    logger.warning(String.format("Couldn't save configuration: %s.", error.getMessage()));
-                    logger.throwing(getClass().getSimpleName(), "tick", error);
-                }
-            }).start();
+            // new Thread(() -> {
+            try {
+                saveConfiguration(); // Honestly don't think this is slow enough to warrant a separate thread
+            } catch (IOException error) {
+                logger.warning(String.format("Couldn't save configuration: %s.", error.getMessage()));
+                logger.throwing(getClass().getSimpleName(), "tick", error);
+            }
+            // }).start();
             lastAutoSaveTime = System.currentTimeMillis();
         }
     }

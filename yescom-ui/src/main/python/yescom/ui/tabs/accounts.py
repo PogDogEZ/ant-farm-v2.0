@@ -347,6 +347,9 @@ class AccountsTab(QTabWidget):
             self.child(9).setToolTip(0, "The ping that the server estimates this player has.")
             self.child(10).setToolTip(0, "The number of chunks in the render distance of this player.")
 
+            # TODO: Last position if logged out
+            # TODO: Failed connection attempts
+
             MainWindow.INSTANCE.server_changed.connect(self._on_server_change)
 
             MainWindow.INSTANCE.player_login.connect(self._on_login)

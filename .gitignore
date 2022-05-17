@@ -1,10 +1,11 @@
-.gradle/
-build/
+/.gradle/
+/build/
 
-yescom-api/build/
-yescom-core/build/
-yescom-ui/build/
+/yescom-api/build/
+/yescom-core/build/
+/yescom-ui/build/
 
-accounts.txt
-config/
+/accounts.txt
+/config/
+/data/
 

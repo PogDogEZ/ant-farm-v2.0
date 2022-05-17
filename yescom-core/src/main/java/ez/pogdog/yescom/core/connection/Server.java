@@ -3,6 +3,7 @@ package ez.pogdog.yescom.core.connection;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
+import ez.pogdog.yescom.api.data.PlayerInfo;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.config.IConfig;
@@ -10,9 +11,14 @@ import ez.pogdog.yescom.core.config.Option;
 import ez.pogdog.yescom.core.query.IQuery;
 import ez.pogdog.yescom.core.query.IQueryHandle;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
+import ez.pogdog.yescom.core.report.connection.HighTSLPReport;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -77,6 +83,7 @@ public class Server implements IConfig {
     /* ------------------------------ Other fields ------------------------------ */
 
     public final List<IQueryHandle<?>> handles = new ArrayList<>(); // TODO: More specific for loaded queries
+    public final Map<UUID, PlayerInfo> onlinePlayers = new HashMap<>();
 
     public final String hostname;
     public final int port;
@@ -85,8 +92,9 @@ public class Server implements IConfig {
 
     private final List<Player> players = new CopyOnWriteArrayList<>();
 
+    private boolean connected;
     private float tickrate;
-    private float tslp;
+    private int tslp;
     private float ping;
 
     private float queriesPerSecond;
@@ -94,8 +102,8 @@ public class Server implements IConfig {
     private int processingSize;
 
     private long lastLoginTime;
-
     private long lastStatsTime;
+    private int lastHighTslp;
 
     public Server(String hostname, int port) {
         this.hostname = hostname;
@@ -109,6 +117,7 @@ public class Server implements IConfig {
 
         lastLoginTime = System.currentTimeMillis() - GLOBAL_LOGIN_TIME.value;
         lastStatsTime = System.currentTimeMillis();
+        lastHighTslp = 0;
 
         // Emitters.ON_ACCOUNT_ADDED.connect(this::onAccountAdded);
     }
@@ -135,10 +144,10 @@ public class Server implements IConfig {
      * Ticks this server.
      */
     public void tick() {
-        List<IAccount> accounts = yesCom.accountHandler.getAccounts();
+        Set<IAccount> accounts = yesCom.accountHandler.getAccounts();
         if (!accounts.isEmpty()) {
             // logger.finer(String.format("Adding %d account(s) to %s:%d...", accounts.size(), hostname, port));
-            outer: for (IAccount account : accounts) {
+            outer: for (IAccount account : accounts) { // FIXME: Way too slow, some sort of emitter?
                 for (Player player : players) {
                     if (player.account.equals(account)) continue outer;
                 }
@@ -153,21 +162,48 @@ public class Server implements IConfig {
         }
         // logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));
 
+        int connected = 0;
         tickrate = 0.0f;
-        tslp = 0.0f;
+        tslp = 30000;
         ping = 0.0f;
 
+        Player lowestTSLP = null;
         for (Player player : players) {
             player.tick();
-            tickrate += player.getServerTPS();
-            tslp += player.getTSLP();
-            ping += player.getServerPing();
+            if (player.isConnected()) {
+                ++connected;
+                tickrate += player.getServerTPS();
+                if (player.getTSLP() < tslp) {
+                    lowestTSLP = player;
+                    tslp = player.getTSLP();
+                }
+                ping += player.getServerPing();
+            }
         }
 
-        if (!players.isEmpty()) {
-            tickrate /= players.size();
-            tslp /= players.size();
-            ping /= players.size();
+        if (connected > 0) {
+            this.connected = true;
+            tickrate /= connected;
+            ping /= connected;
+            if (tslp > HIGH_TSLP.value) {
+                if (tslp - lastHighTslp > HIGH_TSLP.value) {
+                    logger.fine(String.format("Server %s:%d has not responded in %dms!", hostname, port, tslp));
+                    Emitters.ON_REPORT.emit(new HighTSLPReport(lowestTSLP, tslp));
+                    lastHighTslp = tslp;
+                }
+            } else {
+                lastHighTslp = 0;
+            }
+
+        } else {
+            synchronized (onlinePlayers) { // If we aren't connected then we don't know anything about the online players
+                if (!onlinePlayers.isEmpty()) {
+                    onlinePlayers.clear();
+                    Emitters.ON_CONNECTION_LOST.emit(this); // FIXME: Pretty stupid place to emit this
+                }
+            }
+            this.connected = false;
+            tslp = 0;
         }
 
         queriesPerSecond = 0.0f;
@@ -217,7 +253,7 @@ public class Server implements IConfig {
      * @return All the {@link Player}s (that we own) connected to this server.
      */
     public List<Player> getPlayers() {
-        return new ArrayList<>(players);
+        return players;
     }
 
     public int getPlayerCount() {
@@ -283,16 +319,23 @@ public class Server implements IConfig {
     /* ------------------------------ Setters and getters ------------------------------ */
 
     /**
+     * @return Are there any accounts connected to the server currently?
+     */
+    public boolean isConnected() {
+        return connected;
+    }
+
+    /**
      * @return The current server tickrate.
      */
-    public float getTickrate() {
+    public float getTPS() {
         return tickrate;
     }
 
     /**
-     * @return The TSLP for all players connected to this server.
+     * @return The minimum TSLP for all players connected to this server.
      */
-    public float getTSLP() {
+    public int getTSLP() {
         return tslp;
     }
 
