@@ -13,7 +13,7 @@ import java.util.logging.Logger;
  */
 public class ConfigHandler {
 
-    private final Logger logger = Logging.getLogger("yescom.config");
+    private final Logger logger = Logging.getLogger("yescom.core.config");
 
     private final List<IConfig> configurations = new ArrayList<>();
     private final Map<String, Map<String, Object>> values = new HashMap<>();

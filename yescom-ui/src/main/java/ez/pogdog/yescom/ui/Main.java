@@ -7,7 +7,11 @@ import jep.SharedInterpreter;
 
 import java.util.logging.Logger;
 
+/**
+ * Main UI class.
+ */
 public class Main {
+
     public static void main(String[] args) {
         Logger logger = Logging.getLogger("yescom.ui");
 

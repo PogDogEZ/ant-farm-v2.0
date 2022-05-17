@@ -39,7 +39,7 @@ public class Emitter<T> {
      * @param object The object to emit.
      */
     public void emit(T object) {
-        listeners.forEach(listener -> listener.accept(object));
+        for (Consumer<T> listener : listeners) listener.accept(object);
     }
 
     /**

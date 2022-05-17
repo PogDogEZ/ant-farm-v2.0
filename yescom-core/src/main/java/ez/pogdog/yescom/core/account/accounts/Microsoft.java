@@ -17,7 +17,7 @@ import java.util.logging.Logger;
 
 public class Microsoft implements IAccount {
 
-    private final Logger logger = Logging.getLogger("yescom.account.accounts");
+    private final Logger logger = Logging.getLogger("yescom.core.account.accounts");
 
     private final String email;
     private final String password;

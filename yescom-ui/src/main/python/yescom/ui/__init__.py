@@ -2,10 +2,10 @@
 
 import sys
 
-from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 
 from .window import MainWindow
+from .. import emitters  # Localise emitters
 
 from ez.pogdog.yescom.api import Logging
 

@@ -11,7 +11,7 @@ import java.util.logging.Logger;
 
 public class Chat {
 
-    private static final Logger logger = Logging.getLogger("yescom.util");
+    private static final Logger logger = Logging.getLogger("yescom.core.util");
     private static final Map<String, String> COLOURS = new HashMap<>();
 
     static {

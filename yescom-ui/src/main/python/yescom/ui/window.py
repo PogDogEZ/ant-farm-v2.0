@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 
+from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
+
+from .. import emitters
 
 from java.lang import System
 
@@ -23,6 +26,9 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("YesCom \ud83d\ude08")
 
+        self.event_thread = MainWindow.EventQueueThread(self)
+        self.event_thread.start()
+
         self.central_widget = QWidget(self)
         main_layout = QVBoxLayout(self.central_widget)
 
@@ -32,7 +38,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.central_widget)
 
     def __repr__(self) -> str:
-        return "<YesCom() at %x>" % id(self)
+        return "<MainWindow() at %x>" % id(self)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         logger.finer("Received close event.")
@@ -47,8 +53,7 @@ class MainWindow(QMainWindow):
         self.smiling_imp_label.setText("\ud83d\ude08")
         layout.addWidget(self.smiling_imp_label)
 
-        spacer = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        layout.addItem(spacer)
+        layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
         self.servers_box = QComboBox(self.central_widget)
         layout.addWidget(self.servers_box)
@@ -83,6 +88,31 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.options_tab, "Options")
 
         main_layout.addWidget(self.tab_widget)
+
+    # ------------------------------ Classes ------------------------------ #
+
+    class EventQueueThread(QThread):
+        """
+        Due to limitations, calls to interpreters can only be made through the same Java thread that created the
+        interpreter, so events need to be accessed in a queued fashion.
+        """
+
+        yescom = YesCom.getInstance()
+
+        def __init__(self, parent: "MainWindow") -> None:
+            super().__init__(parent)
+
+        def run(self) -> None:
+            while self.yescom.isRunning():
+                for emitter in emitters.EMITTERS:
+                    if not emitter.queuedEvents.isEmpty():
+                        with emitter.synchronized():  # FIXME: Emitter::flush() not working??
+                            while not emitter.queuedEvents.isEmpty():
+                                object_ = emitter.queuedEvents.remove()
+                                for listener in emitter.pyListeners:
+                                    listener(object_)
+
+                QThread.msleep(50)  # Damn
 
 
 from .tabs.accounts import AccountsTab

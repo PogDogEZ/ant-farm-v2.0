@@ -10,6 +10,7 @@ import java.util.Objects;
 /**
  * Something that queries if a chunk is loaded.
  */
+@SuppressWarnings("rawtypes")
 public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQuery>> implements Comparable<IsLoadedQuery<?>>, IQuery<T> {
 
 	/**
