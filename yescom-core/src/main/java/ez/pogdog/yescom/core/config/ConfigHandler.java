@@ -1,5 +1,6 @@
 package ez.pogdog.yescom.core.config;
 
+import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
@@ -11,9 +12,10 @@ import java.util.logging.Logger;
 /**
  * Handles configuration for elements of YesCom.
  */
-public class ConfigHandler {
+public class ConfigHandler extends Thread {
 
     private final Logger logger = Logging.getLogger("yescom.core.config");
+    private final YesCom yesCom = YesCom.getInstance();
 
     private final List<IConfig> configurations = new ArrayList<>();
     private final Map<String, Map<String, Object>> values = new HashMap<>();
@@ -41,6 +43,28 @@ public class ConfigHandler {
         }
 
         lastAutoSaveTime = System.currentTimeMillis() - 60000;
+    }
+
+    @Override
+    public void run() {
+        while (yesCom.isRunning()) {
+            try {
+                Thread.sleep(2500);
+            } catch (InterruptedException ignored) {
+            }
+
+            if (System.currentTimeMillis() - lastAutoSaveTime > 120000) {
+                // new Thread(() -> {
+                try {
+                    saveConfiguration(); // Honestly don't think this is slow enough to warrant a separate thread
+                } catch (IOException error) {
+                    logger.warning(String.format("Couldn't save configuration: %s.", error.getMessage()));
+                    logger.throwing(getClass().getSimpleName(), "tick", error);
+                }
+                // }).start();
+                lastAutoSaveTime = System.currentTimeMillis();
+            }
+        }
     }
 
     private void readConfiguration() throws IOException {
@@ -97,20 +121,6 @@ public class ConfigHandler {
 
             logger.finer(String.format("Saved %d option(s) from %d configuration(s) in %dms.", options,
                     configurations.size(), System.currentTimeMillis() - start));
-        }
-    }
-
-    public void tick() {
-        if (System.currentTimeMillis() - lastAutoSaveTime > 120000) {
-            // new Thread(() -> {
-            try {
-                saveConfiguration(); // Honestly don't think this is slow enough to warrant a separate thread
-            } catch (IOException error) {
-                logger.warning(String.format("Couldn't save configuration: %s.", error.getMessage()));
-                logger.throwing(getClass().getSimpleName(), "tick", error);
-            }
-            // }).start();
-            lastAutoSaveTime = System.currentTimeMillis();
         }
     }
 
