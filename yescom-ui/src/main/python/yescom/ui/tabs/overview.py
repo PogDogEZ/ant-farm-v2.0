@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import math
 import time
 from typing import Any
 
@@ -68,13 +69,18 @@ class OverviewTab(QTabWidget):
         self.tslp_label.setToolTip("The minimum time since last packet across all connected accounts.")
         info_layout.addWidget(self.tslp_label)
 
+        self.uptime_label = QLabel(self)
+        self.uptime_label.setText("Uptime: 00:00:00")
+        self.uptime_label.setToolTip("How long we've been connected to this server for.")
+        info_layout.addWidget(self.uptime_label)
+
         self.queryrate_label = QLabel(self)
         self.queryrate_label.setText("Queryrate: 0.0qps")
         self.queryrate_label.setToolTip("The current rate of queries being sent to the server.")
         info_layout.addWidget(self.queryrate_label)
 
         # TODO: More information (trackers, etc)
-        # TODO: Current time?
+        # TODO: Current (in game) time?
 
         main_layout.addLayout(info_layout)
         main_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
@@ -113,7 +119,7 @@ class OverviewTab(QTabWidget):
     # ------------------------------ Events ------------------------------ #
 
     def _on_tick(self) -> None:
-        if time.time() - self._last_update < .15:  # Don't want it to update too fast
+        if time.time() - self._last_update < .1:  # Don't want it to update too fast
             return
         self._last_update = time.time()
         current = self.main_window.current_server
@@ -121,20 +127,28 @@ class OverviewTab(QTabWidget):
         address = "(no server)"
         tickrate = 0.0
         ping = 0.0
-        tslp = 0
+        tslp = "0"
+        uptime = "00:00:00"
         queryrate = 0.0
 
         if current is not None:
             address = "%s:%i" % (current.hostname, current.port)
-            tickrate = current.getTPS()
-            ping = current.getPing()
-            tslp = current.getTSLP()
-            queryrate = current.getQPS()
+            if current.isConnected():
+                tickrate = current.getTPS()
+                ping = current.getPing()
+                tslp = max(1, current.getTSLP())
+                if tslp > current.HIGH_TSLP.value:
+                    tslp = str(tslp)
+                else:
+                    tslp = "<%i" % (math.ceil(tslp / 50) * 50)
+                uptime = time.strftime("%H:%M:%S", time.gmtime(current.getConnectionTime() / 1000))
+                queryrate = current.getQPS()
 
         self.address_label.setText("Address: %s" % address)
         self.tickrate_label.setText("Tickrate: %.1ftps" % tickrate)
         self.ping_label.setText("Ping: %.1fms" % ping)
-        self.tslp_label.setText("TSLP: %ims" % tslp)
+        self.tslp_label.setText("TSLP: %sms" % tslp)
+        self.uptime_label.setText("Uptime: %s" % uptime)
         self.queryrate_label.setText("Queryrate: %.1fqps" % queryrate)
 
     def _on_server_changed(self) -> None:
@@ -242,6 +256,8 @@ class OverviewTab(QTabWidget):
         Information about any player online on the server.
         """
 
+        tooltip = "%s\nServer: %s:%i.\nPing: %%ims\nGamemode: %%s\nRight click for more options."
+
         def __init__(self, parent: "OverviewTab.OnlinePlayersTree", server: Server, info: PlayerInfo) -> None:
             super().__init__(parent)
 
@@ -251,8 +267,11 @@ class OverviewTab(QTabWidget):
             self.server = server
             self.info = info
 
-            self.setText(0, self.yescom.playersHandler.getName(info.uuid, str(info.uuid)))
-            self.setToolTip(0, "An online player on %s:%i.\nRight click for options." % (server.hostname, server.port))
+            name = self.yescom.playersHandler.getName(info.uuid, str(info.uuid))  # When would this not resolve?
+
+            self.tooltip = self.tooltip % (name, server.hostname, server.port)
+            self.setText(0, name)
+            self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
 
             self.main_window.skin_downloader_thread.request_skin(info.uuid, lambda icon: self.setIcon(0, icon))
 
@@ -285,11 +304,15 @@ class OverviewTab(QTabWidget):
 
         def _on_gamemode_update(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
             if online_player_info.info == self.info and online_player_info.server == self.server:
-                self.child(3).setText(0, "Gamemode: %s" % str(online_player_info.info.gameMode).lower())
+                info = online_player_info.info
+                self.child(3).setText(0, "Gamemode: %s" % str(info.gameMode).lower())
+                self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
 
         def _on_ping_update(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
             if online_player_info.info == self.info and online_player_info.server == self.server:
-                self.child(2).setText(0, "Ping: %ims" % online_player_info.info.ping)
+                info = online_player_info.info
+                self.child(2).setText(0, "Ping: %ims" % info.ping)
+                self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
 
 
 from ..window import MainWindow

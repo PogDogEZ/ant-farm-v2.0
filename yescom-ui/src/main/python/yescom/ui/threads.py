@@ -121,10 +121,15 @@ class SkinDownloaderThread(QThread):  # TODO: Move elsewhere
             for uuid in expired:
                 del self._cache[uuid]
 
+            removed = bool(expired)
             expired.clear()
 
+            removed |= len(self._cache) > 128
             while len(self._cache) > 128:  # Forcefully don't let it get too big
                 self._cache.popitem()
+
+            if removed:
+                logger.finest("Skin cache size is %i." % len(self._cache))
 
             self._cache_mutex.unlock()
 

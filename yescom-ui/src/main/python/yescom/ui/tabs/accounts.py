@@ -365,6 +365,8 @@ class AccountsTab(QTabWidget):
         Information about a player that we "control".
         """
 
+        tooltip = "%s\nServer: %s:%i\nConnected: %%s\nTPS: %%.1ftps\nPing: %%ims\nHealth: %%.1f\nRight click for more options."
+
         def __init__(self, parent: "AccountsTab.PlayersTree", player: Player):
             super().__init__(parent)
 
@@ -373,9 +375,9 @@ class AccountsTab(QTabWidget):
 
             self.player = player
 
-            self.setText(0, player.getUsername())
-            self.setToolTip(0, "Player %s connected to %s:%i.\nRight click for options." %
-                               (player.getUsername(), player.server.hostname, player.server.port))
+            self.tooltip = self.tooltip % (player.getUsername(), player.server.hostname, player.server.port)
+            self.setText(0, player.getUsername())  # TODO: Change colour if connected or not
+            self.setToolTip(0, self.tooltip % (False, 20, 0, 20))
             self.main_window.skin_downloader_thread.request_skin(player.getUUID(), lambda icon: self.setIcon(0, icon))
 
             for index in range(11):
@@ -423,6 +425,8 @@ class AccountsTab(QTabWidget):
 
         def _on_login(self, player: Player) -> None:
             if player == self.player:
+                self.setToolTip(0, self.tooltip % (player.isConnected(), player.getServerTPS(), player.getServerPing(),
+                                                   player.getHealth()))
                 self.child(1).setText(0, "Connected: %s" % player.isConnected())
 
                 self._on_position_update(player)
@@ -430,12 +434,7 @@ class AccountsTab(QTabWidget):
                 self._on_server_stats_update(player)
 
         def _on_logout(self, player_logout: Emitters.PlayerLogout) -> None:
-            if player_logout.player == self.player:
-                self.child(1).setText(0, "Connected: %s" % player_logout.player.isConnected())
-
-                self._on_position_update(player_logout.player)
-                self._on_health_update(player_logout.player)
-                self._on_server_stats_update(player_logout.player)
+            self._on_login(player_logout.player)
 
         def _on_position_update(self, player: Player) -> None:
             if player == self.player:
@@ -451,6 +450,9 @@ class AccountsTab(QTabWidget):
 
         def _on_health_update(self, player: Player) -> None:
             if player == self.player:
+                self.setToolTip(0, self.tooltip % (player.isConnected(), player.getServerTPS(), player.getServerPing(),
+                                                   player.getHealth()))
+
                 self.child(5).setHidden(not player.isConnected())
                 self.child(5).setText(0, "Health: %.1f" % player.getHealth())
                 self.child(6).setHidden(not player.isConnected())
@@ -460,6 +462,9 @@ class AccountsTab(QTabWidget):
 
         def _on_server_stats_update(self, player: Player) -> None:
             if player == self.player:
+                self.setToolTip(0, self.tooltip % (player.isConnected(), player.getServerTPS(), player.getServerPing(),
+                                                   player.getHealth()))
+
                 self.child(8).setHidden(not player.isConnected())
                 self.child(8).setText(0, "Server tickrate: %.1ftps" % player.getServerTPS())
                 self.child(9).setHidden(not player.isConnected())
