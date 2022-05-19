@@ -78,7 +78,7 @@ class AccountsTab(QTabWidget):
 
         self.password_edit = QLineEdit(self)
         self.password_edit.setEchoMode(QLineEdit.Password)
-        self.password_edit.returnPressed.connect(lambda: self._mojang_login(False))  # TODO: Microsoft login?
+        self.password_edit.returnPressed.connect(lambda: self._on_mojang_login(False))  # TODO: Microsoft login?
         self.password_edit.textChanged.connect(self._on_password_changed)
         credentials_layout.addWidget(self.password_edit, 1, 1, 1, 1)
 
@@ -326,7 +326,7 @@ class AccountsTab(QTabWidget):
                 self.addChild(QTreeWidgetItem(self, []))
 
             self.child(0).setText(0, "UUID: %s" % self.player.getUUID())
-            self.child(0).setToolTip(0, "The player's UUID.\nRight click for options.")
+            self.child(0).setToolTip(0, "The player's UUID.")
 
             self._on_login(player)
             self._on_position_update(player)

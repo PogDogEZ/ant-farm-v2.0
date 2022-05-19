@@ -8,14 +8,6 @@ sourceSets {
     }
 }
 
-repositories {
-    maven {
-        name = "jitpack"
-        url = "https://jitpack.io/"
-    }
-    mavenCentral()
-}
-
 dependencies {
     compile project(":yescom:core")
 }

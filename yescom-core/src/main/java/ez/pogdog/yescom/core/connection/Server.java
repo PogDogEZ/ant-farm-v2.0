@@ -261,6 +261,28 @@ public class Server implements IConfig {
     }
 
     /**
+     * @param username The username (case insensitive) of the player.
+     * @return The player, {@code null} if not found.
+     */
+    public Player getPlayer(String username) {
+        for (Player player : players) {
+            if (player.getUsername().equalsIgnoreCase(username)) return player;
+        }
+        return null;
+    }
+
+    /**
+     * @param uuid The UUID of the player.
+     * @return The player, {@code null} if not found.
+     */
+    public Player getPlayer(UUID uuid) {
+        for (Player player : players) {
+            if (player.getUUID().equals(uuid)) return player;
+        }
+        return null;
+    }
+
+    /**
      * Adds a player to this server.
      * @param player The player to add.
      */

@@ -8,14 +8,6 @@ sourceSets {
     }
 }
 
-repositories {
-    maven {
-        name = "jitpack"
-        url = "https://jitpack.io/"
-    }
-    mavenCentral()
-}
-
 dependencies {
     compile project(":yescom:api")
 
@@ -24,7 +16,8 @@ dependencies {
     compile group: "org.json", name: "json", version: "20220320"
 
     compile group: "black.ninia", name: "jep", version: "4.0.3"
-    compile group: "com.github.Steveice10", name: "MCProtocolLib", version: "1.12.2-2"
+    compile group: "com.github.Steveice10", name: "MCProtocolLib", version: "1.12.2-2" // TODO: Eventually upgrade
+    // compile group: "com.github.steveice10", name: "mcprotocollib", version: "1.18.2-1"
 }
 
 jar {

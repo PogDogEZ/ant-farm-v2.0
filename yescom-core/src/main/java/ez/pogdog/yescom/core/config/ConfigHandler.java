@@ -43,6 +43,8 @@ public class ConfigHandler extends Thread {
         }
 
         lastAutoSaveTime = System.currentTimeMillis() - 60000;
+
+        start();
     }
 
     @Override
@@ -59,7 +61,8 @@ public class ConfigHandler extends Thread {
                     saveConfiguration(); // Honestly don't think this is slow enough to warrant a separate thread
                 } catch (IOException error) {
                     logger.warning(String.format("Couldn't save configuration: %s.", error.getMessage()));
-                    logger.throwing(getClass().getSimpleName(), "tick", error);
+                    logger.throwing(getClass().getSimpleName(), "run", error);
+                    return; // Don't spam console
                 }
                 // }).start();
                 lastAutoSaveTime = System.currentTimeMillis();

@@ -1,15 +1,25 @@
 package ez.pogdog.yescom.core.connection;
 
 import ez.pogdog.yescom.YesCom;
+import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
+import ez.pogdog.yescom.core.data.UUIDCache;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.logging.Logger;
 
 /**
  * Handles stuff to do with players (trusted, UUID to name maps).
  */
 public class PlayersHandler implements IConfig {
+
+    private final Logger logger = Logging.getLogger("yescom.core.connection");
+    private final YesCom yesCom = YesCom.getInstance();
 
     @Option.Ungettable
     @Option.Unsettable
@@ -27,13 +37,25 @@ public class PlayersHandler implements IConfig {
             ))
     );
 
+//    @Option.Ungettable
+//    @Option.Unsettable
+//    public final Option<Map<UUID, String>> PLAYER_NAMES = new Option<>( // TODO: Proper data handler
+//            "Player names",
+//            "Map of UUIDs to names.",
+//            new HashMap<>()
+//    );
+
+    private final Map<UUID, String> playerCache = new UUIDCache();
+
+    /*
     @Option.Ungettable
     @Option.Unsettable
-    public final Option<Map<UUID, String>> PLAYER_NAMES = new Option<>(
-            "Player names",
-            "Map of UUIDs to names.",
-            new HashMap<>()
+    public final Option<Set<PlayerInfo>> PLAYERS = new Option<>(
+            "Players",
+            "Information about all players.",
+            new HashSet<>()
     );
+     */
 
     @Override
     public String getIdentifier() {
@@ -68,7 +90,7 @@ public class PlayersHandler implements IConfig {
      * @return The name associated with the UUID.
      */
     public String getName(UUID uuid, String default0) {
-        return PLAYER_NAMES.value.getOrDefault(uuid, default0);
+        return playerCache.getOrDefault(uuid, default0);
     }
 
     /**
@@ -76,7 +98,7 @@ public class PlayersHandler implements IConfig {
      * @return The name associated with the UUID, null if not found.
      */
     public String getName(UUID uuid) {
-        return getName(uuid, null);
+        return playerCache.get(uuid);
     }
 
     /**
@@ -84,6 +106,6 @@ public class PlayersHandler implements IConfig {
      * @param name The associated name.
      */
     public void setName(UUID uuid, String name) {
-        PLAYER_NAMES.value.put(uuid, name);
+        playerCache.put(uuid, name);
     }
 }

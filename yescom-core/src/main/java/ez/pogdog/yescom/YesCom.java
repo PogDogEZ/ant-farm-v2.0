@@ -9,14 +9,20 @@ import ez.pogdog.yescom.core.config.ConfigHandler;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.connection.PlayersHandler;
 import ez.pogdog.yescom.core.connection.Server;
+import ez.pogdog.yescom.core.data.DataHandler;
 import ez.pogdog.yescom.core.query.IsLoadedQuery;
-import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveQuery;
 import jep.Interpreter;
 import jep.MainInterpreter;
 import jep.PyConfig;
 import jep.SharedInterpreter;
-import org.apache.commons.cli.*;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
 
 import java.io.File;
 import java.net.URL;
@@ -60,6 +66,11 @@ public class YesCom extends Thread implements IConfig {
         configDirOpt.setType(String.class);
         options.addOption(configDirOpt);
 
+        Option dataDirOpt = new Option("dd", "data-directory", true, "The path to the data directory.");
+        dataDirOpt.setArgName("path");
+        configDirOpt.setType(String.class);
+        options.addOption(dataDirOpt);
+
         Option hostOpt = new Option("h", "host", true, "The host IP to connect to.");
         // hostOpt.setRequired(true);
         hostOpt.setType(String.class);
@@ -82,6 +93,7 @@ public class YesCom extends Thread implements IConfig {
         String logLevel = cmd.getOptionValue("log-level");
         String accountsFile = cmd.getOptionValue("accounts-file");
         String configDirectory = cmd.getOptionValue("config-directory");
+        String dataDirectory = cmd.getOptionValue("data-directory");
         String host = cmd.getOptionValue("host");
         String port = cmd.getOptionValue("port");
 
@@ -98,7 +110,8 @@ public class YesCom extends Thread implements IConfig {
         try {
             new YesCom(
                     accountsFile == null ? "accounts.txt" : accountsFile,
-                    configDirectory == null ? "config" : configDirectory
+                    configDirectory == null ? "config" : configDirectory,
+                    dataDirectory == null ? "data" : dataDirectory
             );
             Runtime.getRuntime().addShutdownHook(new Thread(instance::shutdown));
             if (host != null) {
@@ -115,6 +128,7 @@ public class YesCom extends Thread implements IConfig {
 
         if (standalone) { // TODO: Proper CLI?
             try {
+                instance.start();
                 instance.join();
             } catch (InterruptedException error) {
                 logger.severe("Couldn't join YesCom instance: " + error.getMessage());
@@ -134,15 +148,16 @@ public class YesCom extends Thread implements IConfig {
 
     public final AccountHandler accountHandler;
     public final ConfigHandler configHandler;
+    public final DataHandler dataHandler;
     public final PlayersHandler playersHandler;
 
     public /* final */ Interpreter python;
 
-    private final String jarPath;
+    public final String jarPath;
 
-    private boolean running;
+    private boolean running = true; // Need this to be true for the UI, otherwise threads will exit before initialised
 
-    public YesCom(String accountsFile, String configDirectory) throws Exception {
+    public YesCom(String accountsFile, String configDirectory, String dataDirectory) throws Exception {
         instance = this;
 
         setName("yescom-main-thread");
@@ -154,6 +169,7 @@ public class YesCom extends Thread implements IConfig {
         // servers.add(new Server("constantiam.net", 25565)); // :p
         accountHandler = new AccountHandler(accountsFile);
         configHandler = new ConfigHandler(configDirectory);
+        dataHandler = new DataHandler(dataDirectory);
         playersHandler = new PlayersHandler();
 
         configHandler.addConfiguration(this);
@@ -192,7 +208,7 @@ public class YesCom extends Thread implements IConfig {
                     Thread.sleep(50 - elapsed);
                 } catch (InterruptedException ignored) {
                 }
-            } else if (elapsed > 1000) {
+            } else if (elapsed > 50) {
                 logger.warning(String.format("Tick took %dms!", elapsed));
             }
         }
@@ -247,5 +263,9 @@ public class YesCom extends Thread implements IConfig {
         running = false;
 
         for (Server server : servers) server.disconnectAll("Shutting down");
+    }
+
+    public boolean isRunning() {
+        return running;
     }
 }
