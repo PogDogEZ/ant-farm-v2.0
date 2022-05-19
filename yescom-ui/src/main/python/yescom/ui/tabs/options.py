@@ -15,4 +15,4 @@ class OptionsTab(QTabWidget):
         return "<OptionsTab() at %x>" % id(self)
 
 
-from ..window import MainWindow
+from ..main import MainWindow

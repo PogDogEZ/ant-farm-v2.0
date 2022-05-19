@@ -320,4 +320,4 @@ class OverviewTab(QTabWidget):
                 self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
 
 
-from ..window import MainWindow
+from ..main import MainWindow

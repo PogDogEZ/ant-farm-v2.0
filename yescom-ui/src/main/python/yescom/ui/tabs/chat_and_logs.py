@@ -15,4 +15,4 @@ class ChatAndLogsTab(QTabWidget):
         return "<ChatAndLogsTab() at %x>" % id(self)
 
 
-from ..window import MainWindow
+from ..main import MainWindow

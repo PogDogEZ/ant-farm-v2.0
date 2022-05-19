@@ -15,4 +15,4 @@ class TasksTab(QTabWidget):
         return "<TasksTab() at %x>" % id(self)
 
 
-from ..window import MainWindow
+from ..main import MainWindow

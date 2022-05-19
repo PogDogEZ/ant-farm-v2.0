@@ -42,6 +42,10 @@ class AccountsTab(QTabWidget):
 
         self._setup_tab()
 
+        for server in self.yescom.servers:  # Players from accounts.txt will already exist by now, so need to add them
+            for player in server.getPlayers():
+                self._on_player_added(player)
+
     def __repr__(self) -> str:
         return "<AccountsTab() at %x>" % id(self)
 
@@ -490,4 +494,4 @@ class AccountsTab(QTabWidget):
             self.finished.emit()  # No error message that we can get :(
 
 
-from ..window import MainWindow
+from ..main import MainWindow

@@ -3,7 +3,6 @@ package ez.pogdog.yescom.core.connection;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
-import ez.pogdog.yescom.api.data.PlayerInfo;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.config.IConfig;
@@ -99,7 +98,8 @@ public class Server implements IConfig {
     private int waitingSize;
     private int processingSize;
 
-    private long lastLoginTime;
+    private long connectionTime; // The time that we first logged into the server at (reset if we aren't connected)
+    private long lastLoginTime; // The last time we logged into the server at
     private long lastStatsTime;
     private int lastHighTslp;
 
@@ -113,6 +113,7 @@ public class Server implements IConfig {
 
         logger.fine(String.format("%s handles for server %s:%d.", handles.size(), hostname, port));
 
+        connectionTime = System.currentTimeMillis();
         lastLoginTime = System.currentTimeMillis() - GLOBAL_LOGIN_TIME.value;
         lastStatsTime = System.currentTimeMillis();
         lastHighTslp = 0;
@@ -215,6 +216,8 @@ public class Server implements IConfig {
                 }
             }
             tslp = 0;
+
+            connectionTime = System.currentTimeMillis();
         }
 
         queriesPerSecond = 0.0f;
@@ -386,6 +389,13 @@ public class Server implements IConfig {
      */
     public boolean isConnected() {
         return connected;
+    }
+
+    /**
+     * @return How long have we been connected to this server?
+     */
+    public int getConnectionTime() {
+        return (int)(System.currentTimeMillis() - connectionTime);
     }
 
     /**

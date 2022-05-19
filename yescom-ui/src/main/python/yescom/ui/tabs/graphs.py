@@ -15,4 +15,4 @@ class GraphsTab(QTabWidget):
         return "<GraphsTab() at %x>" % id(self)
 
 
-from ..window import MainWindow
+from ..main import MainWindow

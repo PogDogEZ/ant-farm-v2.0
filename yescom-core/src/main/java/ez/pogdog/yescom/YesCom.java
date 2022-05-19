@@ -12,6 +12,7 @@ import ez.pogdog.yescom.core.connection.Server;
 import ez.pogdog.yescom.core.data.DataHandler;
 import ez.pogdog.yescom.core.query.IsLoadedQuery;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveQuery;
+import ez.pogdog.yescom.core.util.Bootstrap;
 import jep.Interpreter;
 import jep.MainInterpreter;
 import jep.PyConfig;
@@ -24,10 +25,6 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
-import java.io.File;
-import java.net.URL;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -128,6 +125,10 @@ public class YesCom extends Thread implements IConfig {
 
         if (standalone) { // TODO: Proper CLI?
             try {
+                logger.fine("Bootstrapping jep...");
+                PyConfig config = new PyConfig();
+                MainInterpreter.setInitParams(config);
+
                 instance.start();
                 instance.join();
             } catch (InterruptedException error) {
@@ -136,6 +137,10 @@ public class YesCom extends Thread implements IConfig {
                 System.exit(1);
             }
         }
+    }
+
+    public static void main(List<String> args) { // For Python, cos bruh
+        main(args.toArray(String[]::new), false);
     }
 
     public static void main(String[] args) {
@@ -155,38 +160,45 @@ public class YesCom extends Thread implements IConfig {
 
     public final String jarPath;
 
-    private boolean running = true; // Need this to be true for the UI, otherwise threads will exit before initialised
+    private boolean running;
+    private boolean initialised;
 
     public YesCom(String accountsFile, String configDirectory, String dataDirectory) throws Exception {
-        instance = this;
+        instance = this; // Need this to be true for the UI, otherwise threads will exit before initialised
+        running = true;
+        initialised = false;
 
         setName("yescom-main-thread");
 
         logger.fine("Locating jar...");
-        jarPath = findJar();
+        jarPath = Bootstrap.findJar();
         logger.fine(String.format("Found jar at %s.", jarPath));
 
         // servers.add(new Server("constantiam.net", 25565)); // :p
-        accountHandler = new AccountHandler(accountsFile);
         configHandler = new ConfigHandler(configDirectory);
-        dataHandler = new DataHandler(dataDirectory);
+
+        accountHandler = new AccountHandler(accountsFile);
         playersHandler = new PlayersHandler();
+
+        dataHandler = new DataHandler(dataDirectory);
 
         configHandler.addConfiguration(this);
         configHandler.addConfiguration(playersHandler);
-
-        logger.fine("Bootstrapping jep...");
-        PyConfig config = new PyConfig();
-        MainInterpreter.setInitParams(config);
     }
 
     @Override
     public void run() {
+        running = true;
+
         python = new SharedInterpreter();
         python.exec("from sys import path"); // Bruh
         python.invoke("path.append", jarPath);
 
-        running = true;
+        for (Server server : servers) server.tick(); // Tick initial servers, auth accounts
+
+        initialised = true;
+        logger.fine("YesCom initialised, let the chaos begin.");
+
         while (running) {
             long start = System.currentTimeMillis();
 
@@ -217,37 +229,6 @@ public class YesCom extends Thread implements IConfig {
     }
 
     /**
-     * Finds the location of the current jar file.
-     * @return The location of the jar file.
-     * @throws Exception If the location cannot be found.
-     */
-    private String findJar() throws Exception {
-        URL jarLocation = YesCom.class.getProtectionDomain().getCodeSource().getLocation();
-        if (jarLocation == null) throw new Exception("Couldn't find jar location.");
-
-        String jarPath = URLDecoder.decode(jarLocation.getPath(), StandardCharsets.UTF_8.name());
-        if (jarPath.startsWith("file:")) jarPath = jarPath.substring(5);
-        if (!new File(jarPath).exists() && jarPath.contains("!")) {
-            StringBuilder pathBuilder = new StringBuilder();
-            boolean exists = false;
-
-            for (String element : jarPath.split("!")) { // Can't believe I have to do this smh
-                pathBuilder.append(element);
-                if (new File(pathBuilder.toString()).exists()) {
-                    exists = true;
-                    break;
-                }
-                pathBuilder.append("!");
-            }
-
-            if (!exists) throw new Exception("Couldn't find jar location.");
-            jarPath = pathBuilder.toString();
-        }
-
-        return jarPath;
-    }
-
-    /**
      * Shuts down YesCom.
      */
     public void shutdown() {
@@ -257,7 +238,19 @@ public class YesCom extends Thread implements IConfig {
         for (Server server : servers) server.disconnectAll("Shutting down");
     }
 
+    /* ------------------------------ Setters and getters ------------------------------ */
+
+    /**
+     * @return Is YesCom running?
+     */
     public boolean isRunning() {
         return running;
+    }
+
+    /**
+     * @return Is YesCom initialised fully?
+     */
+    public boolean isInitialised() {
+        return initialised;
     }
 }

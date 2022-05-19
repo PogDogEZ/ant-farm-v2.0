@@ -49,7 +49,7 @@ class EventQueueThread(QThread):
             MainWindow.INSTANCE.tick.emit()
 
 
-class SkinDownloaderThread(QThread):  # TODO: Move elsewhere
+class SkinDownloaderThread(QThread):
     """
     Downloads skins in the background, for the icon view.
     """
@@ -160,4 +160,4 @@ class SkinDownloaderThread(QThread):  # TODO: Move elsewhere
         self._requests[uuid] = (int(time.time()) - 1, callbacks)
 
 
-from .window import MainWindow
+from .main import MainWindow
