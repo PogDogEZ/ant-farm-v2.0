@@ -272,7 +272,10 @@ public class Player implements IConfig {
      * @param reason The reason for disconnecting.
      */
     public void disconnect(String reason) {
-        if (isConnected()) session.disconnect(reason);
+        if (isConnected()) {
+            lastLoginTime = System.currentTimeMillis(); // So we don't instantly log back in again
+            session.disconnect(reason);
+        }
     }
 
     /**
@@ -666,6 +669,8 @@ public class Player implements IConfig {
 
             lastTimeUpdate = -1L;
             lastWorldTicks = 0L;
+
+            session = null;
         }
     }
 }

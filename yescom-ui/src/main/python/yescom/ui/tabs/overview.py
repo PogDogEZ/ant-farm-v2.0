@@ -34,6 +34,9 @@ class OverviewTab(QTabWidget):
         parent.tick.connect(self._on_tick)
 
         parent.server_changed.connect(self._on_server_changed)
+        # Hack, to make sure we enable the "Disconnect all" button
+        parent.connection_established.connect(self._on_server_changed)
+        parent.connection_lost.connect(self._on_server_changed)
 
         parent.player_joined.connect(self._on_player_joined)
         parent.player_left.connect(self._on_player_left)
@@ -98,6 +101,7 @@ class OverviewTab(QTabWidget):
         )
         self.disconnect_all_button.setText("Disconnect all")
         self.disconnect_all_button.setToolTip("Disconnects all currently online players and disables auto reconnecting.")
+        self.disconnect_all_button.clicked.connect(lambda checked: self.main_window.disconnect_all())
         buttons_layout.addWidget(self.disconnect_all_button)
 
         online_layout.addLayout(buttons_layout)
@@ -139,6 +143,9 @@ class OverviewTab(QTabWidget):
             count = len(self.main_window.current_server.onlinePlayers)
 
         self.online_players_label.setText("Online players (%i):" % count)
+        self.disconnect_all_button.setEnabled(
+            self.main_window.current_server is not None and self.main_window.current_server.isConnected()
+        )
 
     def _on_player_joined(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
         for top_level_index in range(self.online_players_tree.topLevelItemCount()):

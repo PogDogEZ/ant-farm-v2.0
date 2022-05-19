@@ -97,9 +97,34 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         logger.finer("Received close event.")
-        System.exit(0)  # self.yescom.shutdown()
 
-        super().closeEvent(event)
+        connected_servers = 0
+        connected_players = 0
+        for server in self.yescom.servers:
+            if server.isConnected():
+                connected_servers += 1
+                for player in server.getPlayers():
+                    if player.isConnected():
+                        connected_players += 1
+
+        if connected_servers or connected_players:
+            message_box = QMessageBox(self)
+            message_box.setIcon(QMessageBox.Question)
+            message_box.setWindowTitle("Exit")
+            message_box.setText("Are you sure you wish to exit YesCom?")
+            # TODO: Trackers, tasks, etc...
+            message_box.setInformativeText("There are currently %i connected player(s) over %i servers." %
+                                           (connected_players, connected_servers))
+            message_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+            message_box.setDefaultButton(QMessageBox.Cancel)
+            message_box.setEscapeButton(QMessageBox.Cancel)
+            message_box.accepted.connect(lambda: System.exit(0))  # TODO: Proper shut down sequence?
+            message_box.rejected.connect(lambda: event.setAccepted(False))
+            message_box.exec()
+        else:
+            System.exit(0)
+
+        # super().closeEvent(event)
 
     def _setup_signals(self) -> None:
         # Need to do this cos we want the certain processes to be carried out in the right thread
@@ -214,6 +239,25 @@ class MainWindow(QMainWindow):
         """
 
         self.tab_widget.setCurrentIndex(self.tab_widget.indexOf(tab))
+
+    def disconnect_all(self) -> None:
+        """
+        Disconnects all online players, but warns before doing so.
+        """
+
+        if self.current_server is None:
+            return
+
+        message_box = QMessageBox(self)
+        message_box.setIcon(QMessageBox.Warning)
+        message_box.setWindowTitle("Disconnect all")
+        message_box.setText("This will disconnect %i account(s)." % len(self.current_server.getPlayers()))
+        message_box.setInformativeText("You will also have to enable auto reconnect for all players again, manually.")
+        message_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        message_box.setDefaultButton(QMessageBox.Cancel)
+        message_box.setEscapeButton(QMessageBox.Cancel)
+        message_box.accepted.connect(lambda: self.current_server.disconnectAll("Disconnect all", True))
+        message_box.exec()
 
     # ------------------------------ Classes ------------------------------ #
 

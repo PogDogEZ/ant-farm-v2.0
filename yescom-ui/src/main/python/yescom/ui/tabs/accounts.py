@@ -31,6 +31,8 @@ class AccountsTab(QTabWidget):
         self._processing_account: Union[IAccount, None] = None
 
         parent.server_changed.connect(self._on_server_changed)
+        parent.connection_established.connect(self._on_server_changed)
+        parent.connection_lost.connect(self._on_server_changed)
 
         parent.account_added.connect(self._on_account_added)
         parent.account_error.connect(self._on_account_error)
@@ -54,6 +56,15 @@ class AccountsTab(QTabWidget):
 
         self.accounts_tree = AccountsTab.PlayersTree(self)
         list_layout.addWidget(self.accounts_tree)
+
+        self.disconnect_all_button = QPushButton(self)
+        self.disconnect_all_button.setEnabled(
+            self.main_window.current_server is not None and self.main_window.current_server.isConnected()
+        )
+        self.disconnect_all_button.setText("Disconnect all")
+        self.disconnect_all_button.setToolTip("Disconnects all currently online players and disables auto reconnecting.")
+        self.disconnect_all_button.clicked.connect(lambda checked: self.main_window.disconnect_all())
+        list_layout.addWidget(self.disconnect_all_button)
 
         main_layout.addLayout(list_layout)
 
@@ -110,6 +121,9 @@ class AccountsTab(QTabWidget):
             count = len(self.main_window.current_server.getPlayers())
 
         self.accounts_label.setText("Accounts (%i):" % count)
+        self.disconnect_all_button.setEnabled(
+            self.main_window.current_server is not None and self.main_window.current_server.isConnected()
+        )
 
     def _on_account_added(self, account: IAccount) -> None:
         if account == self._processing_account:
