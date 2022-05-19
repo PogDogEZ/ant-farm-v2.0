@@ -41,8 +41,8 @@ public class UUIDCache extends Thread implements Map<UUID, String>, IConfig {
 
     /* ------------------------------ Other fields ------------------------------ */
 
-    private final Map<UUID, String> cached = new HashMap<>();
-    private final Map<UUID, String> dirty = new LinkedHashMap<>();
+    private final Map<UUID, String> cached = new LinkedHashMap<>();
+    private final Map<UUID, String> dirty = new HashMap<>();
 
     private final File uuidFile;
     private boolean cacheEnabled;
@@ -310,7 +310,6 @@ public class UUIDCache extends Thread implements Map<UUID, String>, IConfig {
                 cached.put(uuid, name);
 
             } catch (IOException error) {
-                error.printStackTrace();
                 break;
             }
 

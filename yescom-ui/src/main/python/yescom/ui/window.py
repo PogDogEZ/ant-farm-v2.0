@@ -24,13 +24,14 @@ class MainWindow(QMainWindow):
     """
 
     INSTANCE: Union["MainWindow", None] = None
-    yescom = YesCom.getInstance()
 
     # ------------------------------ Signals ------------------------------ #
 
     tick = pyqtSignal()
 
     server_changed = pyqtSignal()
+    connection_established = pyqtSignal(object)
+    connection_lost = pyqtSignal(object)
 
     account_added = pyqtSignal(object)
     account_error = pyqtSignal(object)
@@ -44,6 +45,11 @@ class MainWindow(QMainWindow):
     player_position_update = pyqtSignal(object)
     player_health_update = pyqtSignal(object)
     player_server_stats_update = pyqtSignal(object)
+
+    player_joined = pyqtSignal(object)
+    player_left = pyqtSignal(object)
+    player_gamemode_update = pyqtSignal(object)
+    player_ping_update = pyqtSignal(object)
 
     # ------------------------------ Properties ------------------------------ #
 
@@ -67,6 +73,8 @@ class MainWindow(QMainWindow):
         self.__class__.INSTANCE = self
 
         super().__init__(*args, **kwargs)
+
+        self.yescom = YesCom.getInstance()
 
         self.setWindowTitle("YesCom \ud83d\ude08")
 
@@ -108,6 +116,14 @@ class MainWindow(QMainWindow):
         emitters.ON_PLAYER_POSITION_UPDATE.connect(self.player_position_update.emit)
         emitters.ON_PLAYER_HEALTH_UPDATE.connect(self.player_health_update.emit)
         emitters.ON_PLAYER_SERVER_STATS_UPDATE.connect(self.player_server_stats_update.emit)
+
+        emitters.ON_CONNECTION_ESTABLISHED.connect(self.connection_established.emit)
+        emitters.ON_CONNECTION_LOST.connect(self.connection_lost.emit)
+
+        emitters.ON_PLAYER_JOIN.connect(self.player_joined.emit)
+        emitters.ON_PLAYER_LEAVE.connect(self.player_left.emit)
+        emitters.ON_PLAYER_GAMEMODE_UPDATE.connect(self.player_gamemode_update.emit)
+        emitters.ON_PLAYER_PING_UPDATE.connect(self.player_ping_update.emit)
 
     def _setup_top_bar(self, main_layout: QVBoxLayout) -> None:
         layout = QHBoxLayout()
@@ -180,6 +196,25 @@ class MainWindow(QMainWindow):
                     logger.fine("Current server: %s" % self._current_server)
                     return
 
+    # ------------------------------ Public methods ------------------------------ #
+
+    def is_selected(self, tab: QTabWidget) -> bool:
+        """
+        :param tab: The tab to check.
+        :return: Is the tab currently selected?
+        """
+
+        return self.tab_widget.currentWidget() == tab
+
+    def set_selected(self, tab: QTabWidget) -> None:
+        """
+        Sets the currently selected tab.
+
+        :param tab: The tab to set as active.
+        """
+
+        self.tab_widget.setCurrentIndex(self.tab_widget.indexOf(tab))
+
     # ------------------------------ Classes ------------------------------ #
 
     class EventQueueThread(QThread):
@@ -188,10 +223,10 @@ class MainWindow(QMainWindow):
         interpreter, so events need to be accessed in a queued fashion.
         """
 
-        yescom = YesCom.getInstance()
-
         def __init__(self, parent: "MainWindow") -> None:
             super().__init__(parent)
+
+            self.yescom = YesCom.getInstance()
 
         def run(self) -> None:
             while self.yescom.isRunning():
@@ -208,7 +243,7 @@ class MainWindow(QMainWindow):
                 if elapsed < 50:
                     QThread.msleep(50 - int(elapsed))  # Damn
 
-                # Fake tick event, I know, but in fairness the real tick event would also fire here so we might as well
+                # Fake tick event, I know, but in fairness the real tick event would also fire here, so we might as well
                 # just skip the middle man
                 MainWindow.INSTANCE.tick.emit()
 

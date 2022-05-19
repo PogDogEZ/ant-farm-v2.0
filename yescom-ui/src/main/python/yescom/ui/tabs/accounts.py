@@ -22,17 +22,19 @@ class AccountsTab(QTabWidget):
     Allows you to manage accounts that are associated with YesCom.
     """
 
-    yescom = YesCom.getInstance()
-
     def __init__(self, parent: "MainWindow") -> None:
         super().__init__(parent)
 
+        self.yescom = YesCom.getInstance()
+        self.main_window = MainWindow.INSTANCE
+
         self._processing_account: Union[IAccount, None] = None
+
+        parent.server_changed.connect(self._on_server_changed)
 
         parent.account_added.connect(self._on_account_added)
         parent.account_error.connect(self._on_account_error)
 
-        parent.server_changed.connect(self._on_server_changed)
         parent.player_added.connect(self._on_player_added)
         parent.player_removed.connect(self._on_player_removed)
 
@@ -50,7 +52,7 @@ class AccountsTab(QTabWidget):
         self.accounts_label.setText("Accounts (0):")
         list_layout.addWidget(self.accounts_label)
 
-        self.accounts_tree = AccountsTab.PlayerTreeWidget(self)
+        self.accounts_tree = AccountsTab.PlayersTree(self)
         list_layout.addWidget(self.accounts_tree)
 
         main_layout.addLayout(list_layout)
@@ -102,6 +104,13 @@ class AccountsTab(QTabWidget):
 
     # ------------------------------ Events ------------------------------ #
 
+    def _on_server_changed(self) -> None:
+        count = 0
+        if self.main_window.current_server is not None:
+            count = len(self.main_window.current_server.getPlayers())
+
+        self.accounts_label.setText("Accounts (%i):" % count)
+
     def _on_account_added(self, account: IAccount) -> None:
         if account == self._processing_account:
             # QMessageBox.information(self, "Success", "Account was successfully logged in.")
@@ -130,16 +139,12 @@ class AccountsTab(QTabWidget):
 
             QApplication.restoreOverrideCursor()
 
-    def _on_server_changed(self) -> None:
-        count = 0 if MainWindow.INSTANCE.current_server is None else MainWindow.INSTANCE.current_server.getPlayerCount()
-        self.accounts_label.setText("Accounts (%i):" % count)
-
     def _on_player_added(self, player: Player) -> None:
         for top_level_index in range(self.accounts_tree.topLevelItemCount()):
             if player == self.accounts_tree.topLevelItem(top_level_index).player:
                 return
         self._on_server_changed()  # Update label
-        self.accounts_tree.addTopLevelItem(AccountsTab.PlayerItemWidget(self.accounts_tree, player))
+        self.accounts_tree.addTopLevelItem(AccountsTab.PlayerItem(self.accounts_tree, player))
 
     def _on_player_removed(self, player: Player) -> None:
         for top_level_index in range(self.accounts_tree.topLevelItemCount()):
@@ -186,17 +191,46 @@ class AccountsTab(QTabWidget):
             QApplication.setOverrideCursor(Qt.WaitCursor)
             self.yescom.accountHandler.addAccount(self._processing_account)
 
+    # ------------------------------ Public methods ------------------------------ #
+
+    def select(self, player: Player) -> None:
+        """
+        Selects the given player in the accounts list.
+
+        :param player: The player to select.
+        """
+
+        for top_level_index in range(self.accounts_tree.topLevelItemCount()):
+            item = self.accounts_tree.topLevelItem(top_level_index)
+            if item.player == player:
+                self.accounts_tree.setCurrentIndex(self.accounts_tree.indexFromItem(item))
+                return
+
+    def expand(self, player: Player) -> None:
+        """
+        Expands the menu on the given player.
+
+        :param player: The player whose menu to expand.
+        """
+
+        for top_level_index in range(self.accounts_tree.topLevelItemCount()):
+            item = self.accounts_tree.topLevelItem(top_level_index)
+            if item.player == player:
+                self.accounts_tree.expand(self.accounts_tree.indexFromItem(item))
+                return
+
     # ------------------------------ Classes ------------------------------ #
 
-    class PlayerTreeWidget(QTreeWidget):
+    class PlayersTree(QTreeWidget):
         """
         Stores players in a tree view.
         """
 
-        yescom = YesCom.getInstance()
-
         def __init__(self, parent: "AccountsTab") -> None:
             super().__init__(parent)
+
+            self.yescom = YesCom.getInstance()
+            self.main_window = MainWindow.INSTANCE
 
             self.setHeaderHidden(True)
 
@@ -210,17 +244,13 @@ class AccountsTab(QTabWidget):
             menu = QMenu()
             clipboard = QApplication.clipboard()
 
-            if isinstance(current, AccountsTab.PlayerItemWidget):
+            if isinstance(current, AccountsTab.PlayerItem):
                 player = current.player
-            elif isinstance(current.parent(), AccountsTab.PlayerItemWidget):
+            elif isinstance(current.parent(), AccountsTab.PlayerItem):
                 player = current.parent().player
             else:
                 logger.warning("Don't know how to handle item %s." % current)
                 return
-
-            position = player.getPosition()
-            angle = player.getAngle()
-            dimension = player.getDimension()
 
             # TODO: Proper options integration?
             auto_reconnect = menu.addAction("Auto reconnect", lambda: self._toggle(player.AUTO_RECONNECT))
@@ -251,15 +281,25 @@ class AccountsTab(QTabWidget):
 
             copy_coords = menu.addAction(
                 "Copy coords",
-                lambda: clipboard.setText("%.1f, %.1f, %.1f" % (position.getX(), position.getY(), position.getZ())),
+                lambda: clipboard.setText("%.1f, %.1f, %.1f" % (
+                    player.getPosition().getX(),
+                    player.getPosition().getY(),
+                    player.getPosition().getZ(),
+                )),
             )
             copy_coords.setEnabled(player.isConnected())
             copy_angle = menu.addAction(
                 "Copy angle",
-                lambda: clipboard.setText("%.1f, %.1f" % (angle.getYaw(), angle.getPitch()))
+                lambda: clipboard.setText("%.1f, %.1f" % (
+                    player.getAngle().getYaw(),
+                    player.getAngle().getPitch(),
+                )),
             )
             copy_angle.setEnabled(player.isConnected())
-            copy_dimension = menu.addAction("Copy dimension", lambda: clipboard.setText(str(dimension).lower()))
+            copy_dimension = menu.addAction(
+                "Copy dimension",
+                lambda: clipboard.setText(str(player.getDimension()).lower()),
+            )
             copy_dimension.setEnabled(player.isConnected())
 
             # TODO: Goto player, view disconnect logs, view chat
@@ -275,7 +315,7 @@ class AccountsTab(QTabWidget):
 
             if not player.isConnected():
                 QMessageBox.warning(self, "Couldn't connect", "Couldn't connect player %r to %s:%i." %
-                                    (player.getUsername(), player.server.hostname, player.server.port))
+                                          (player.getUsername(), player.server.hostname, player.server.port))
 
         # ------------------------------ Utility methods ------------------------------ #
 
@@ -306,13 +346,15 @@ class AccountsTab(QTabWidget):
                 self.yescom.accountHandler.removeAccount(player.account)
                 QMessageBox.information(self, "Success", "The player %r's account has been removed." % player.getUsername())
 
-    class PlayerItemWidget(QTreeWidgetItem):
+    class PlayerItem(QTreeWidgetItem):
         """
-        Information about an online player.
+        Information about a player that we "control".
         """
 
-        def __init__(self, parent: QTreeWidget, player: Player):
+        def __init__(self, parent: "AccountsTab.PlayersTree", player: Player):
             super().__init__(parent)
+
+            self.main_window = MainWindow.INSTANCE
 
             self.player = player
 
@@ -320,7 +362,6 @@ class AccountsTab(QTabWidget):
             self.setToolTip(0, "Player %s connected to %s:%i.\nRight click for options." %
                                (player.getUsername(), player.server.hostname, player.server.port))
             # self.setIcon()  # TODO: Icon is player's skin's head
-            # TODO: Right click events
 
             for index in range(11):
                 self.addChild(QTreeWidgetItem(self, []))
@@ -350,20 +391,20 @@ class AccountsTab(QTabWidget):
             # TODO: Last position if logged out
             # TODO: Failed connection attempts
 
-            MainWindow.INSTANCE.server_changed.connect(self._on_server_change)
+            self.main_window.server_changed.connect(self._on_server_change)
 
-            MainWindow.INSTANCE.player_login.connect(self._on_login)
-            MainWindow.INSTANCE.player_logout.connect(self._on_logout)
+            self.main_window.player_login.connect(self._on_login)
+            self.main_window.player_logout.connect(self._on_logout)
 
-            MainWindow.INSTANCE.player_position_update.connect(self._on_position_update)
-            MainWindow.INSTANCE.player_health_update.connect(self._on_health_update)
-            MainWindow.INSTANCE.player_server_stats_update.connect(self._on_server_stats_update)
+            self.main_window.player_position_update.connect(self._on_position_update)
+            self.main_window.player_health_update.connect(self._on_health_update)
+            self.main_window.player_server_stats_update.connect(self._on_server_stats_update)
 
         def __eq__(self, other) -> bool:
-            return isinstance(other, AccountsTab.PlayerItemWidget) and other.player == self.player
+            return isinstance(other, AccountsTab.PlayerItem) and other.player == self.player
 
         def _on_server_change(self) -> None:
-            self.setHidden(MainWindow.INSTANCE.current_server != self.player.server)
+            self.setHidden(self.main_window.current_server != self.player.server)
 
         def _on_login(self, player: Player) -> None:
             if player == self.player:
@@ -419,7 +460,7 @@ class AccountsTab(QTabWidget):
 
         finished = pyqtSignal()
 
-        def __init__(self, parent: "AccountsTab.PlayerTreeWidget", player: Player) -> None:
+        def __init__(self, parent: "AccountsTab.PlayersTree", player: Player) -> None:
             super().__init__(parent)
 
             self.player = player

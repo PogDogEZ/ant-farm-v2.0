@@ -178,13 +178,6 @@ public class YesCom extends Thread implements IConfig {
         logger.fine("Bootstrapping jep...");
         PyConfig config = new PyConfig();
         MainInterpreter.setInitParams(config);
-
-        start();
-
-        try {
-            Thread.sleep(50); // Wait for the interpreter to start
-        } catch (InterruptedException ignored) {
-        }
     }
 
     @Override
@@ -199,7 +192,6 @@ public class YesCom extends Thread implements IConfig {
 
             Emitters.ON_PRE_TICK.emit();
             for (Server server : servers) server.tick();
-            configHandler.tick();
             Emitters.ON_POST_TICK.emit();
 
             long elapsed = System.currentTimeMillis() - start;

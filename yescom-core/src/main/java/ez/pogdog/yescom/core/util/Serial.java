@@ -71,11 +71,19 @@ public final class Serial {
         }
 
         public static float readFloat(InputStream inputStream) throws IOException {
-            return Float.intBitsToFloat(readInteger(inputStream)); // FIXME: This sucks
+            try {
+                return ByteBuffer.wrap(inputStream.readNBytes(4)).getFloat();
+            } catch (BufferUnderflowException error) {
+                throw new IOException(error);
+            }
         }
 
         public static double readDouble(InputStream inputStream) throws IOException {
-            return Double.longBitsToDouble(readLong(inputStream));
+            try {
+                return ByteBuffer.wrap(inputStream.readNBytes(8)).getDouble();
+            } catch (BufferUnderflowException error) {
+                throw new IOException(error);
+            }
         }
 
         /* ------------------------------ Strings and UUIDs ------------------------------ */
@@ -135,11 +143,11 @@ public final class Serial {
         }
 
         public static void writeFloat(float num, OutputStream outputStream) throws IOException {
-            writeInteger(Float.floatToIntBits(num), outputStream);
+            outputStream.write(ByteBuffer.allocate(4).putFloat(num).array());
         }
 
         public static void writeDouble(double num, OutputStream outputStream) throws IOException {
-            writeLong(Double.doubleToLongBits(num), outputStream);
+            outputStream.write(ByteBuffer.allocate(8).putDouble(num).array());
         }
 
         /* ------------------------------ Strings and UUIDs ------------------------------ */

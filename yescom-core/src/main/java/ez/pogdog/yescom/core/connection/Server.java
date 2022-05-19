@@ -15,7 +15,6 @@ import ez.pogdog.yescom.core.report.connection.HighTSLPReport;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -182,6 +181,11 @@ public class Server implements IConfig {
         }
 
         if (connected > 0) {
+            if (!this.connected) {
+                logger.info(String.format("Established connection to %s:%d.", hostname, port));
+                Emitters.ON_CONNECTION_ESTABLISHED.emit(this);
+            }
+
             this.connected = true;
             tickrate /= connected;
             ping /= connected;
@@ -196,10 +200,16 @@ public class Server implements IConfig {
             }
 
         } else {
+            if (this.connected) {
+                logger.info(String.format("Lost connection to %s:%d.", hostname, port));
+                Emitters.ON_CONNECTION_LOST.emit(this);
+            }
+
             synchronized (onlinePlayers) { // If we aren't connected then we don't know anything about the online players
                 if (!onlinePlayers.isEmpty()) {
+                    for (PlayerInfo info : onlinePlayers.values())
+                        Emitters.ON_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(info, this));
                     onlinePlayers.clear();
-                    Emitters.ON_CONNECTION_LOST.emit(this); // FIXME: Pretty stupid place to emit this
                 }
             }
             this.connected = false;
@@ -256,12 +266,8 @@ public class Server implements IConfig {
         return players;
     }
 
-    public int getPlayerCount() {
-        return players.size();
-    }
-
     /**
-     * @param username The username (case insensitive) of the player.
+     * @param username The username (case-insensitive) of the player.
      * @return The player, {@code null} if not found.
      */
     public Player getPlayer(String username) {
@@ -280,6 +286,28 @@ public class Server implements IConfig {
             if (player.getUUID().equals(uuid)) return player;
         }
         return null;
+    }
+
+    /**
+     * @param username The username (case-insensitive) of the player.
+     * @return Is the player with that username one of our own?
+     */
+    public boolean hasPlayer(String username) {
+        for (Player player : players) {
+            if (player.getUsername().equalsIgnoreCase(username)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * @param uuid The UUID of the player.
+     * @return Is the player with that UUID one of our own?
+     */
+    public boolean hasPlayer(UUID uuid) { // FIXME: Make these lookups faster
+        for (Player player : players) {
+            if (player.getUUID().equals(uuid)) return true;
+        }
+        return false;
     }
 
     /**

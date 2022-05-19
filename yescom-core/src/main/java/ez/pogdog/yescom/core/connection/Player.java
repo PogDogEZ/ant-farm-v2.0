@@ -17,13 +17,21 @@ import com.github.steveice10.mc.protocol.packet.ingame.server.ServerRespawnPacke
 import com.github.steveice10.mc.protocol.packet.ingame.server.entity.player.ServerPlayerHealthPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.entity.player.ServerPlayerPositionRotationPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.entity.spawn.ServerSpawnPlayerPacket;
-import com.github.steveice10.mc.protocol.packet.ingame.server.window.*;
+import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerCloseWindowPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerOpenWindowPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerSetSlotPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerWindowItemsPacket;
+import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerWindowPropertyPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerChunkDataPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerUnloadChunkPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerUpdateTimePacket;
 import com.github.steveice10.packetlib.Client;
 import com.github.steveice10.packetlib.Session;
-import com.github.steveice10.packetlib.event.session.*;
+import com.github.steveice10.packetlib.event.session.ConnectedEvent;
+import com.github.steveice10.packetlib.event.session.DisconnectedEvent;
+import com.github.steveice10.packetlib.event.session.PacketReceivedEvent;
+import com.github.steveice10.packetlib.event.session.PacketSentEvent;
+import com.github.steveice10.packetlib.event.session.SessionAdapter;
 import com.github.steveice10.packetlib.packet.Packet;
 import com.github.steveice10.packetlib.tcp.TcpClientSession;
 import com.github.steveice10.packetlib.tcp.TcpSessionFactory;
@@ -32,6 +40,7 @@ import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.Angle;
 import ez.pogdog.yescom.api.data.ChunkPosition;
 import ez.pogdog.yescom.api.data.Dimension;
+import ez.pogdog.yescom.api.data.PlayerInfo;
 import ez.pogdog.yescom.api.data.Position;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.account.IAccount;
@@ -312,21 +321,17 @@ public class Player implements IConfig {
     }
 
     public void setPosition(Position position) {
-        synchronized (this) {
-            this.position.setX(position.getX());
-            this.position.setY(position.getY());
-            this.position.setZ(position.getZ());
-        }
+        this.position.setX(position.getX());
+        this.position.setY(position.getY());
+        this.position.setZ(position.getZ());
 
         positionDirty = true;
     }
 
     public void setPosition(double x, double y, double z) {
-        synchronized (this) {
-            position.setX(x);
-            position.setY(y);
-            position.setZ(z);
-        }
+        position.setX(x);
+        position.setY(y);
+        position.setZ(z);
 
         positionDirty = true;
     }
@@ -336,19 +341,15 @@ public class Player implements IConfig {
     }
 
     public void setAngle(Angle angle) {
-        synchronized (this) {
-            this.angle.setYaw(angle.getYaw());
-            this.angle.setPitch(angle.getPitch());
-        }
+        this.angle.setYaw(angle.getYaw());
+        this.angle.setPitch(angle.getPitch());
 
         angleDirty = true;
     }
 
     public void setAngle(float yaw, float pitch) {
-        synchronized (this) {
-            angle.setYaw(yaw);
-            angle.setPitch(pitch);
-        }
+        angle.setYaw(yaw);
+        angle.setPitch(pitch);
 
         angleDirty = true;
     }
@@ -359,10 +360,7 @@ public class Player implements IConfig {
     }
 
     public void setOnGround(boolean onGround) {
-        synchronized (this) {
-            this.onGround = onGround;
-        }
-
+        this.onGround = onGround;
         positionDirty = true;
     }
 
@@ -400,7 +398,7 @@ public class Player implements IConfig {
      * @return Time since last packet, in milliseconds.
      */
     public int getTSLP() {
-        if (session == null) return 0;
+        if (!isConnected()) return 0;
         return (int)(System.currentTimeMillis() - lastPacketTime);
     }
 
@@ -429,150 +427,196 @@ public class Player implements IConfig {
                 // For checking that this actually works lol
                 logger.finest(String.format("%s: %s", getUsername(), /* server.hostname, server.port, */
                         Chat.unwrap(((ServerChatPacket)event.getPacket()).getMessage(), true)));
+                Emitters.ON_PLAYER_CHAT.emit(new Emitters.PlayerChat(Player.this, // FIXME: Improve chat messages
+                        ((ServerChatPacket)event.getPacket()).getMessage().getFullText()));
             }
 
-            synchronized (Player.this) {
-                if (event.getPacket() instanceof ServerPlayerPositionRotationPacket) {
-                    ServerPlayerPositionRotationPacket packet = event.getPacket();
+            if (event.getPacket() instanceof ServerPlayerPositionRotationPacket) {
+                ServerPlayerPositionRotationPacket packet = event.getPacket();
 
-                    position.setX(packet.getX());
-                    position.setY(packet.getY());
-                    position.setZ(packet.getZ());
-                    angle.setYaw(packet.getYaw());
-                    angle.setPitch(packet.getPitch());
+                position.setX(packet.getX());
+                position.setY(packet.getY());
+                position.setZ(packet.getZ());
+                angle.setYaw(packet.getYaw());
+                angle.setPitch(packet.getPitch());
 
-                    if (currentTeleportID < 0) {
-                        logger.finer(String.format("%s logged in at xyz: %.1f, %.1f, %.1f dim: %s.", getUsername(),
-                                position.getX(), position.getY(), position.getZ(), dimension));
+                if (currentTeleportID < 0) {
+                    logger.finer(String.format("%s logged in at xyz: %.1f, %.1f, %.1f dim: %s.", getUsername(),
+                            position.getX(), position.getY(), position.getZ(), dimension));
 
-                        // We will confirm the first teleport, but subsequent ones are handled elsewhere
-                        session.send(new ClientTeleportConfirmPacket(packet.getTeleportId()));
-                    }
-                    currentTeleportID = packet.getTeleportId();
+                    // We will confirm the first teleport, but subsequent ones are handled elsewhere
+                    session.send(new ClientTeleportConfirmPacket(packet.getTeleportId()));
+                }
+                currentTeleportID = packet.getTeleportId();
 
-                } else if (event.getPacket() instanceof ServerPlayerHealthPacket) {
-                    ServerPlayerHealthPacket packet = event.getPacket();
+            } else if (event.getPacket() instanceof ServerPlayerHealthPacket) {
+                ServerPlayerHealthPacket packet = event.getPacket();
 
-                    if (health != packet.getHealth() || hunger != packet.getFood() || saturation != packet.getSaturation())
-                        Emitters.ON_PLAYER_HEALTH_UPDATE.emit(Player.this);
+                if (health != packet.getHealth() || hunger != packet.getFood() || saturation != packet.getSaturation())
+                    Emitters.ON_PLAYER_HEALTH_UPDATE.emit(Player.this);
 
-                    health = packet.getHealth();
-                    hunger = packet.getFood();
-                    saturation = packet.getSaturation();
+                health = packet.getHealth();
+                hunger = packet.getFood();
+                saturation = packet.getSaturation();
 
-                    if (health <= 0.0f) {
-                        disconnect("Dead.");
-                        Emitters.ON_REPORT.emit(new DeadReport(Player.this));
+                if (health <= 0.0f) {
+                    disconnect("Dead.");
+                    Emitters.ON_REPORT.emit(new DeadReport(Player.this));
+                    AUTO_RECONNECT.value = false;
+
+                } else if (health <= LOGOUT_HEALTH.value) {
+                    disconnect(String.format("Low health (%.1f).", health));
+                    Emitters.ON_REPORT.emit(new HealthLogoutReport(Player.this, health));
+                    lastAutoLogoutTime = System.currentTimeMillis();
+
+                    if (DISABLE_AUTO_RECONNECT_ON_LOGOUT.value) {
+                        logger.info(String.format("Auto reconnect disabled for %s.", getUsername()));
                         AUTO_RECONNECT.value = false;
+                    }
+                }
 
-                    } else if (health <= LOGOUT_HEALTH.value) {
-                        disconnect(String.format("Low health (%.1f).", health));
-                        Emitters.ON_REPORT.emit(new HealthLogoutReport(Player.this, health));
-                        lastAutoLogoutTime = System.currentTimeMillis();
+            } else if (event.getPacket() instanceof ServerJoinGamePacket) {
+                dimension = Dimension.fromMC(((ServerJoinGamePacket)event.getPacket()).getDimension());
+                Emitters.ON_PLAYER_POSITION_UPDATE.emit(Player.this);
 
-                        if (DISABLE_AUTO_RECONNECT_ON_LOGOUT.value) {
-                            logger.info(String.format("Auto reconnect disabled for %s.", getUsername()));
-                            AUTO_RECONNECT.value = false;
+            } else if (event.getPacket() instanceof ServerRespawnPacket) {
+                dimension = Dimension.fromMC(((ServerRespawnPacket)event.getPacket()).getDimension());
+                Emitters.ON_PLAYER_POSITION_UPDATE.emit(Player.this);
+
+            } else if (event.getPacket() instanceof ServerPlayerListEntryPacket) {
+                ServerPlayerListEntryPacket packet = event.getPacket();
+
+                for (PlayerListEntry entry : packet.getEntries()) {
+                    UUID uuid = entry.getProfile().getId();
+
+                    if (packet.getAction() == PlayerListEntryAction.ADD_PLAYER) {
+                        yesCom.playersHandler.setName(uuid, entry.getProfile().getName());
+
+                        synchronized (server.onlinePlayers) {
+                            boolean joined = !server.onlinePlayers.containsKey(uuid);
+                            PlayerInfo info = server.onlinePlayers.computeIfAbsent(uuid, PlayerInfo::new);
+                            info.gameMode = PlayerInfo.GameMode.valueOf(entry.getGameMode().name()); // FIXME: This is a hack
+                            info.ping = entry.getPing();
+                            if (joined) Emitters.ON_PLAYER_JOIN.emit(new Emitters.OnlinePlayerInfo(info, server));
+                        }
+
+                    } else if (packet.getAction() == PlayerListEntryAction.REMOVE_PLAYER) {
+                        synchronized (server.onlinePlayers) {
+                            if (server.onlinePlayers.containsKey(uuid)) {
+                                PlayerInfo info = server.onlinePlayers.get(uuid);
+                                server.onlinePlayers.remove(uuid);
+                                Emitters.ON_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(info, server));
+                            }
+                        }
+
+                    } else if (packet.getAction() == PlayerListEntryAction.UPDATE_GAMEMODE) {
+                        synchronized (server.onlinePlayers) {
+                            // Gets sent before ADD_PLAYER on constantiam.net, is this normal behaviour?
+                            if (server.onlinePlayers.containsKey(uuid)) {
+                                PlayerInfo info = server.onlinePlayers.get(uuid);
+                                PlayerInfo.GameMode gameMode = PlayerInfo.GameMode.valueOf(entry.getGameMode().name()); // FIXME: This is a hack
+
+                                if (info.gameMode != gameMode) {
+                                    info.gameMode = gameMode;
+                                    Emitters.ON_PLAYER_GAMEMODE_UPDATE.emit(new Emitters.OnlinePlayerInfo(info, server));
+                                }
+                            }
+                        }
+
+                    } else if (packet.getAction() == PlayerListEntryAction.UPDATE_LATENCY) {
+                        synchronized (server.onlinePlayers) {
+                            if (server.onlinePlayers.containsKey(uuid)) {
+                                PlayerInfo info = server.onlinePlayers.get(uuid);
+
+                                if (info.ping != entry.getPing()) {
+                                    info.ping = entry.getPing();
+                                    Emitters.ON_PLAYER_PING_UPDATE.emit(new Emitters.OnlinePlayerInfo(info, server));
+                                }
+                            }
                         }
                     }
 
-                } else if (event.getPacket() instanceof ServerJoinGamePacket) {
-                    dimension = Dimension.fromMC(((ServerJoinGamePacket)event.getPacket()).getDimension());
-                    Emitters.ON_PLAYER_POSITION_UPDATE.emit(Player.this);
-
-                } else if (event.getPacket() instanceof ServerRespawnPacket) {
-                    dimension = Dimension.fromMC(((ServerRespawnPacket)event.getPacket()).getDimension());
-                    Emitters.ON_PLAYER_POSITION_UPDATE.emit(Player.this);
-
-                } else if (event.getPacket() instanceof ServerPlayerListEntryPacket) {
-                    ServerPlayerListEntryPacket packet = event.getPacket();
-
-                    for (PlayerListEntry entry : packet.getEntries()) {
-                        if (packet.getAction() == PlayerListEntryAction.ADD_PLAYER)
-                            yesCom.playersHandler.setName(entry.getProfile().getId(), entry.getProfile().getName());
-
-                        if (entry.getProfile().getId().equals(getUUID())) {
-                            serverPing = entry.getPing();
-                            logger.finer(String.format("%s server ping is %dms.", getUsername(), serverPing));
-                            Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
-                            break;
-                        }
-                    }
-
-                } else if (event.getPacket() instanceof ServerUpdateTimePacket) {
-                    ServerUpdateTimePacket packet = event.getPacket();
-
-                    if (lastTimeUpdate == -1L) {
-                        lastTimeUpdate = System.currentTimeMillis();
-                        lastWorldTicks = packet.getWorldAge();
-                    } else {
-                        float newTPS = (packet.getWorldAge() - lastWorldTicks) / ((System.currentTimeMillis() - lastTimeUpdate) / 1000.0f);
-                        if (newTPS <= 0.0f || newTPS >= 1000.0f || !Float.isFinite(newTPS)) return; // Damn
-
-                        tickValues.add(newTPS);
-                        while (tickValues.size() > 5) tickValues.remove(0);
-                        lastTimeUpdate = System.currentTimeMillis();
-                        lastWorldTicks = packet.getWorldAge();
-
-                        float old = serverTPS;
-
-                        serverTPS = 0.0f;
-                        for (float value : tickValues) serverTPS += value;
-                        serverTPS /= tickValues.size();
-                        // logger.finest(String.format("%s:%d estimated tickrate: %.1f", server.hostname, server.port, serverTPS));
-
-                        if (old != 0.0f && Math.abs(serverTPS - old) > server.EXTREME_TPS_CHANGE.value) {
-                            logger.finer(String.format("%s extreme TPS change, old: %.1f, new: %.1f.", getUsername(),
-                                    old, serverTPS));
-                            Emitters.ON_REPORT.emit(new ExtremeTPSReport(Player.this, old));
-                        }
+                    if (uuid.equals(getUUID())) {
+                        serverPing = entry.getPing();
+                        logger.finer(String.format("%s server ping is %dms.", getUsername(), serverPing));
                         Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
+                        // break;
                     }
+                }
 
-                } else if (event.getPacket() instanceof ServerOpenWindowPacket) {
-                    currentWindowID = ((ServerOpenWindowPacket)event.getPacket()).getWindowId();
+            } else if (event.getPacket() instanceof ServerUpdateTimePacket) {
+                ServerUpdateTimePacket packet = event.getPacket();
 
-                } else if (event.getPacket() instanceof ServerWindowItemsPacket) {
-                    ServerWindowItemsPacket packet = event.getPacket();
-                    if (packet.getWindowId() >= 0 && packet.getWindowId() <= 100) currentWindowID = packet.getWindowId();
+                if (lastTimeUpdate == -1L) {
+                    lastTimeUpdate = System.currentTimeMillis();
+                    lastWorldTicks = packet.getWorldAge();
+                } else {
+                    float newTPS = (packet.getWorldAge() - lastWorldTicks) / ((System.currentTimeMillis() - lastTimeUpdate) / 1000.0f);
+                    if (newTPS <= 0.0f || newTPS >= 1000.0f || !Float.isFinite(newTPS)) return; // Damn
 
-                } else if (event.getPacket() instanceof ServerWindowPropertyPacket) {
-                    ServerWindowPropertyPacket packet = event.getPacket();
-                    if (packet.getWindowId() >= 0 && packet.getWindowId() <= 100) currentWindowID = packet.getWindowId();
+                    tickValues.add(newTPS);
+                    while (tickValues.size() > 5) tickValues.remove(0);
+                    lastTimeUpdate = System.currentTimeMillis();
+                    lastWorldTicks = packet.getWorldAge();
 
-                } else if (event.getPacket() instanceof ServerSetSlotPacket) {
-                    ServerSetSlotPacket packet = event.getPacket();
-                    if (packet.getWindowId() >= 0 && packet.getWindowId() <= 100) currentWindowID = packet.getWindowId();
+                    float old = serverTPS;
 
-                } else if (event.getPacket() instanceof ServerCloseWindowPacket) {
-                    currentWindowID = ((ServerCloseWindowPacket)event.getPacket()).getWindowId();
+                    serverTPS = 0.0f;
+                    for (float value : tickValues) serverTPS += value;
+                    serverTPS /= tickValues.size();
+                    // logger.finest(String.format("%s:%d estimated tickrate: %.1f", server.hostname, server.port, serverTPS));
 
-                } else if (event.getPacket() instanceof ServerChunkDataPacket) {
-                    ServerChunkDataPacket packet = event.getPacket();
-                    loadedChunks.add(new ChunkPosition(packet.getColumn().getX(), packet.getColumn().getZ()));
-
+                    if (old != 0.0f && Math.abs(serverTPS - old) > server.EXTREME_TPS_CHANGE.value) {
+                        logger.finer(String.format("%s extreme TPS change, old: %.1f, new: %.1f.", getUsername(),
+                                old, serverTPS));
+                        Emitters.ON_REPORT.emit(new ExtremeTPSReport(Player.this, old));
+                    }
                     Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
+                }
 
-                } else if (event.getPacket() instanceof ServerUnloadChunkPacket) {
-                    ServerUnloadChunkPacket packet = event.getPacket();
-                    loadedChunks.remove(new ChunkPosition(packet.getX(), packet.getZ()));
+            } else if (event.getPacket() instanceof ServerOpenWindowPacket) {
+                currentWindowID = ((ServerOpenWindowPacket)event.getPacket()).getWindowId();
 
-                    Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
+            } else if (event.getPacket() instanceof ServerWindowItemsPacket) {
+                ServerWindowItemsPacket packet = event.getPacket();
+                if (packet.getWindowId() >= 0 && packet.getWindowId() <= 100) currentWindowID = packet.getWindowId();
 
-                } else if (event.getPacket() instanceof ServerSpawnPlayerPacket) {
-                    ServerSpawnPlayerPacket packet = event.getPacket();
+            } else if (event.getPacket() instanceof ServerWindowPropertyPacket) {
+                ServerWindowPropertyPacket packet = event.getPacket();
+                if (packet.getWindowId() >= 0 && packet.getWindowId() <= 100) currentWindowID = packet.getWindowId();
 
-                    if (VISUAL_RANGE_LOGOUT.value && !server.isTrusted(packet.getUUID())) {
-                        String playerName = yesCom.playersHandler.getName(packet.getUUID(), packet.getUUID().toString());
-                        disconnect(String.format("%s entered visual range at xyz: %.1f, %.1f, %.1f.", playerName,
-                                packet.getX(), packet.getY(), packet.getY()));
-                        Emitters.ON_REPORT.emit(new VisualRangeLogoutReport(Player.this, packet.getUUID()));
-                        lastAutoLogoutTime = System.currentTimeMillis();
+            } else if (event.getPacket() instanceof ServerSetSlotPacket) {
+                ServerSetSlotPacket packet = event.getPacket();
+                if (packet.getWindowId() >= 0 && packet.getWindowId() <= 100) currentWindowID = packet.getWindowId();
 
-                        if (DISABLE_AUTO_RECONNECT_ON_LOGOUT.value) {
-                            logger.info(String.format("Auto reconnect disabled for %s.", getUsername()));
-                            AUTO_RECONNECT.value = false;
-                        }
+            } else if (event.getPacket() instanceof ServerCloseWindowPacket) {
+                currentWindowID = ((ServerCloseWindowPacket)event.getPacket()).getWindowId();
+
+            } else if (event.getPacket() instanceof ServerChunkDataPacket) {
+                ServerChunkDataPacket packet = event.getPacket();
+                loadedChunks.add(new ChunkPosition(packet.getColumn().getX(), packet.getColumn().getZ()));
+
+                Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
+
+            } else if (event.getPacket() instanceof ServerUnloadChunkPacket) {
+                ServerUnloadChunkPacket packet = event.getPacket();
+                loadedChunks.remove(new ChunkPosition(packet.getX(), packet.getZ()));
+
+                Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
+
+            } else if (event.getPacket() instanceof ServerSpawnPlayerPacket) {
+                ServerSpawnPlayerPacket packet = event.getPacket();
+
+                if (VISUAL_RANGE_LOGOUT.value && !server.isTrusted(packet.getUUID())) {
+                    String playerName = yesCom.playersHandler.getName(packet.getUUID(), packet.getUUID().toString());
+                    disconnect(String.format("%s entered visual range at xyz: %.1f, %.1f, %.1f.", playerName,
+                            packet.getX(), packet.getY(), packet.getY()));
+                    Emitters.ON_REPORT.emit(new VisualRangeLogoutReport(Player.this, packet.getUUID()));
+                    lastAutoLogoutTime = System.currentTimeMillis();
+
+                    if (DISABLE_AUTO_RECONNECT_ON_LOGOUT.value) {
+                        logger.info(String.format("Auto reconnect disabled for %s.", getUsername()));
+                        AUTO_RECONNECT.value = false;
                     }
                 }
             }

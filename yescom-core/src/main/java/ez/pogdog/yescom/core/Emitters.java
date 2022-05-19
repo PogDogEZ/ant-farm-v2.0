@@ -2,9 +2,11 @@ package ez.pogdog.yescom.core;
 
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.packetlib.packet.Packet;
+import ez.pogdog.yescom.api.data.PlayerInfo;
 import ez.pogdog.yescom.api.event.Emitter;
 import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.connection.Player;
+import ez.pogdog.yescom.core.connection.Server;
 import ez.pogdog.yescom.core.report.Report;
 
 /**
@@ -22,7 +24,7 @@ public class Emitters {
      */
     public static final Emitter<?> ON_POST_TICK = new Emitter<>(null);
 
-    /* ------------------------------ Players ------------------------------ */
+    /* ------------------------------ Accounts ------------------------------ */
 
     /**
      * Fired when an account is added.
@@ -67,9 +69,14 @@ public class Emitters {
     public static final Emitter<Player> ON_PLAYER_SERVER_STATS_UPDATE = new Emitter<>(Player.class);
 
     /**
-     * Fired when one of our players logs out of the server.
+     * Fired when one of the players logs out of the server.
      */
     public static final Emitter<PlayerLogout> ON_PLAYER_LOGOUT = new Emitter<>(PlayerLogout.class);
+
+    /**
+     * Fired when one of the players receives a chat message.
+     */
+    public static final Emitter<PlayerChat> ON_PLAYER_CHAT = new Emitter<>(PlayerChat.class);
 
     public static final Emitter<PlayerPacket> ON_PLAYER_PACKET_IN = new Emitter<>(PlayerPacket.class);
     public static final Emitter<PlayerPacket> ON_PLAYER_PACKET_OUT = new Emitter<>(PlayerPacket.class);
@@ -78,6 +85,38 @@ public class Emitters {
      * Fired when a player is removed.
      */
     public static final Emitter<Player> ON_PLAYER_REMOVED = new Emitter<>(Player.class);
+
+    /* ------------------------------ Server ------------------------------ */
+
+    /**
+     * Fired when we've just connected to a server.
+     */
+    public static final Emitter<Server> ON_CONNECTION_ESTABLISHED = new Emitter<>(Server.class);
+
+    /**
+     * Fired when connection is fully lost to a server.
+     */
+    public static final Emitter<Server> ON_CONNECTION_LOST = new Emitter<>(Server.class);
+
+    /**
+     * Fired when any player joins the server.
+     */
+    public static final Emitter<OnlinePlayerInfo> ON_PLAYER_JOIN = new Emitter<>(OnlinePlayerInfo.class);
+
+    /**
+     * Fired when any player leaves the server.
+     */
+    public static final Emitter<OnlinePlayerInfo> ON_PLAYER_LEAVE = new Emitter<>(OnlinePlayerInfo.class);
+
+    /**
+     * Fired when a player's gamemode changes.
+     */
+    public static final Emitter<OnlinePlayerInfo> ON_PLAYER_GAMEMODE_UPDATE = new Emitter<>(OnlinePlayerInfo.class);
+
+    /**
+     * Fired when a player's ping changes.
+     */
+    public static final Emitter<OnlinePlayerInfo> ON_PLAYER_PING_UPDATE = new Emitter<>(OnlinePlayerInfo.class);
 
     /* ------------------------------ Reporting ------------------------------ */
 
@@ -114,6 +153,17 @@ public class Emitters {
         }
     }
 
+    public static class PlayerChat {
+
+        public final Player player;
+        public final String message;
+
+        public PlayerChat(Player player, String message) {
+            this.player = player;
+            this.message = message;
+        }
+    }
+
     public static class PlayerPacket {
 
         public final Player player;
@@ -122,6 +172,17 @@ public class Emitters {
         public PlayerPacket(Player player, Packet packet) {
             this.player = player;
             this.packet = packet;
+        }
+    }
+
+    public static class OnlinePlayerInfo {
+
+        public final PlayerInfo info;
+        public final Server server;
+
+        public OnlinePlayerInfo(PlayerInfo info, Server server) {
+            this.info = info;
+            this.server = server;
         }
     }
 }
