@@ -78,8 +78,12 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("YesCom \ud83d\ude08")
 
-        self.event_thread = MainWindow.EventQueueThread(self)
+        logger.fine("Starting event queue thread...")
+        self.event_thread = EventQueueThread(self)
         self.event_thread.start()
+        logger.fine("Starting skin downloader thread...")
+        self.skin_downloader_thread = SkinDownloaderThread(self)
+        self.skin_downloader_thread.start()
 
         self._current_server: Union[Server, None] = None
 
@@ -127,6 +131,7 @@ class MainWindow(QMainWindow):
         # super().closeEvent(event)
 
     def _setup_signals(self) -> None:
+        logger.fine("Setting up signals...")
         # Need to do this cos we want the certain processes to be carried out in the right thread
 
         emitters.ON_ACCOUNT_ADDED.connect(self.account_added.emit)
@@ -151,6 +156,8 @@ class MainWindow(QMainWindow):
         emitters.ON_PLAYER_PING_UPDATE.connect(self.player_ping_update.emit)
 
     def _setup_top_bar(self, main_layout: QVBoxLayout) -> None:
+        logger.fine("Setting up top bar...")
+
         layout = QHBoxLayout()
 
         self.smiling_imp_label = QLabel(self.central_widget)
@@ -177,6 +184,8 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(layout)
 
     def _setup_tabs(self, main_layout: QVBoxLayout) -> None:
+        logger.fine("Setting up tabs...")
+
         self.tab_widget = QTabWidget(self.central_widget)
 
         self.overview_tab = OverviewTab(self)
@@ -259,38 +268,6 @@ class MainWindow(QMainWindow):
         message_box.accepted.connect(lambda: self.current_server.disconnectAll("Disconnect all", True))
         message_box.exec()
 
-    # ------------------------------ Classes ------------------------------ #
-
-    class EventQueueThread(QThread):
-        """
-        Due to limitations, calls to interpreters can only be made through the same Java thread that created the
-        interpreter, so events need to be accessed in a queued fashion.
-        """
-
-        def __init__(self, parent: "MainWindow") -> None:
-            super().__init__(parent)
-
-            self.yescom = YesCom.getInstance()
-
-        def run(self) -> None:
-            while self.yescom.isRunning():
-                start = time.time()
-                for emitter in emitters.EMITTERS:
-                    if not emitter.queuedEvents.isEmpty():
-                        while not emitter.queuedEvents.isEmpty():
-                            with emitter.synchronized():
-                                object_ = emitter.queuedEvents.remove()
-                            # This shouldn't require a lock, right? We barely add listeners throughout
-                            for listener in emitter.pyListeners:
-                                listener(object_)
-                elapsed = (time.time() - start) * 1000
-                if elapsed < 50:
-                    QThread.msleep(50 - int(elapsed))  # Damn
-
-                # Fake tick event, I know, but in fairness the real tick event would also fire here, so we might as well
-                # just skip the middle man
-                MainWindow.INSTANCE.tick.emit()
-
 
 from .tabs.accounts import AccountsTab
 from .tabs.chat_and_logs import ChatAndLogsTab
@@ -299,3 +276,4 @@ from .tabs.grid_view import GridViewTab
 from .tabs.options import OptionsTab
 from .tabs.overview import OverviewTab
 from .tabs.tasks import TasksTab
+from .threads import EventQueueThread, SkinDownloaderThread

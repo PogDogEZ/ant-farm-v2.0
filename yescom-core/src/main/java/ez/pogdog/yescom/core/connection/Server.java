@@ -14,9 +14,8 @@ import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
 import ez.pogdog.yescom.core.report.connection.HighTSLPReport;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -82,7 +81,7 @@ public class Server implements IConfig {
     /* ------------------------------ Other fields ------------------------------ */
 
     public final List<IQueryHandle<?>> handles = new ArrayList<>(); // TODO: More specific for loaded queries
-    public final Map<UUID, PlayerInfo> onlinePlayers = new HashMap<>();
+    public final Set<UUID> onlinePlayers = new HashSet<>();
 
     public final String hostname;
     public final int port;
@@ -161,7 +160,7 @@ public class Server implements IConfig {
         }
         // logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));
 
-        int connected = 0;
+        int connectedCount = 0;
         tickrate = 0.0f;
         tslp = 30000;
         ping = 0.0f;
@@ -170,7 +169,7 @@ public class Server implements IConfig {
         for (Player player : players) {
             player.tick();
             if (player.isConnected()) {
-                ++connected;
+                ++connectedCount;
                 tickrate += player.getServerTPS();
                 if (player.getTSLP() < tslp) {
                     lowestTSLP = player;
@@ -180,15 +179,17 @@ public class Server implements IConfig {
             }
         }
 
-        if (connected > 0) {
-            if (!this.connected) {
+        boolean wasConnected = connected;
+
+        if (connectedCount > 0) {
+            connected = true;
+            if (!wasConnected) {
                 logger.info(String.format("Established connection to %s:%d.", hostname, port));
                 Emitters.ON_CONNECTION_ESTABLISHED.emit(this);
             }
 
-            this.connected = true;
-            tickrate /= connected;
-            ping /= connected;
+            tickrate /= connectedCount;
+            ping /= connectedCount;
             if (tslp > HIGH_TSLP.value) {
                 if (tslp - lastHighTslp > HIGH_TSLP.value) {
                     logger.fine(String.format("Server %s:%d has not responded in %dms!", hostname, port, tslp));
@@ -200,19 +201,19 @@ public class Server implements IConfig {
             }
 
         } else {
-            if (this.connected) {
+            connected = false;
+            if (wasConnected) {
                 logger.info(String.format("Lost connection to %s:%d.", hostname, port));
                 Emitters.ON_CONNECTION_LOST.emit(this);
             }
 
             synchronized (onlinePlayers) { // If we aren't connected then we don't know anything about the online players
                 if (!onlinePlayers.isEmpty()) {
-                    for (PlayerInfo info : onlinePlayers.values())
-                        Emitters.ON_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(info, this));
+                    for (UUID uuid : onlinePlayers)
+                        Emitters.ON_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(yesCom.playersHandler.playerCache.get(uuid), this));
                     onlinePlayers.clear();
                 }
             }
-            this.connected = false;
             tslp = 0;
         }
 
@@ -333,11 +334,23 @@ public class Server implements IConfig {
     }
 
     /**
-     * Disconnects all online players.
+     * Disconnects all online players for this server.
+     * @param reason The reason for the disconnect.
+     * @param disableAutoReconnect Disables auto reconnect for all players.
+     */
+    public void disconnectAll(String reason, boolean disableAutoReconnect) {
+        for (Player player : players) {
+            player.disconnect(reason);
+            if (disableAutoReconnect) player.AUTO_RECONNECT.value = false;
+        }
+    }
+
+    /**
+     * Disconnects all online players for this server.
      * @param reason The reason for the disconnect.
      */
     public void disconnectAll(String reason) {
-        for (Player player : players) player.disconnect(reason);
+        disconnectAll(reason, false);
     }
 
     /**

@@ -11,14 +11,21 @@ import java.util.UUID;
 /**
  * Stores information about a player.
  */
-public class PlayerInfo {
+public class PlayerInfo implements Cloneable {
 
     public final Set<Session> sessions = new HashSet<>();
 
     public final UUID uuid;
 
+    public String username = "";
+    public String skinURL = "";
     public int ping = 0;
     public GameMode gameMode = GameMode.SURVIVAL;
+
+    public PlayerInfo(UUID uuid, String username) {
+        this.uuid = uuid;
+        this.username = username;
+    }
 
     public PlayerInfo(UUID uuid) {
         this.uuid = uuid;
@@ -35,6 +42,18 @@ public class PlayerInfo {
     @Override
     public int hashCode() {
         return Objects.hash(uuid); // Everything else is subject to change
+    }
+
+    @Override
+    public PlayerInfo clone() {
+        try {
+            PlayerInfo clone = (PlayerInfo)super.clone();
+            clone.username = username;
+            clone.skinURL = skinURL;
+            return clone;
+        } catch (CloneNotSupportedException error) {
+            throw new IllegalStateException(error);
+        }
     }
 
     /* ------------------------------ Classes ------------------------------ */

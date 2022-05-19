@@ -1,8 +1,9 @@
 package me.nathan.futureclient.framework.auth.phase;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import ez.pogdog.yescom.api.Globals;
 import me.nathan.futureclient.client.altmanager.AccountException;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -24,8 +25,8 @@ public class MCToken {
             http.setRequestMethod("POST"); // PUT is another valid option
             http.setDoOutput(true);
 
-            JSONObject request = new JSONObject();
-            request.put("identityToken","XBL3.0 x="+lsToken.uhs+";"+lsToken.token);
+            JsonObject request = new JsonObject();
+            request.add("identityToken", new JsonPrimitive("XBL3.0 x="+lsToken.uhs+";"+lsToken.token));
 
             String body = request.toString();
 
@@ -45,14 +46,14 @@ public class MCToken {
             }
             String lines = reader.lines().collect(Collectors.joining());
 
-            JSONObject json;
+            JsonObject json;
             try {
-                json = new JSONObject(lines);
-            } catch (JSONException error) {
+                json = Globals.JSON.parse(lines).getAsJsonObject();
+            } catch (Exception error) {
                 throw new AccountException("Error requesting xbox login: " + lines);
             }
 
-            return new MCTokenType(json.getString("access_token"), json.getString("username"));
+            return new MCTokenType(json.get("access_token").getAsString(), json.get("username").getAsString());
         } catch (IOException e) {
             e.printStackTrace();
             throw e;
@@ -78,17 +79,17 @@ public class MCToken {
             }
             String lines = reader.lines().collect(Collectors.joining());
 
-            JSONObject json;
+            JsonObject json;
             try {
-                json = new JSONObject(lines);
-            } catch (JSONException error) {
+                json = Globals.JSON.parse(lines).getAsJsonObject();
+            } catch (Exception error) {
                 throw new AccountException("Could not retrieve profile: " + lines);
             }
-            if (json.keySet().contains("error"))
-                throw new AccountException("Error retrieving profile: "+json.getString("errorMessage"));
+            if (json.has("error"))
+                throw new AccountException("Error retrieving profile: " + json.get("errorMessage").getAsString());
 
-            String skinURL = json.getJSONArray("skins").getJSONObject(0).getString("url");
-            return new Profile(json.getString("id"), json.getString("name"), skinURL);
+            String skinURL = json.get("skins").getAsJsonArray().get(0).getAsJsonObject().get("url").getAsString();
+            return new Profile(json.get("id").getAsString(), json.get("name").getAsString(), skinURL);
         } catch (IOException e) {
             e.printStackTrace();
             throw e;

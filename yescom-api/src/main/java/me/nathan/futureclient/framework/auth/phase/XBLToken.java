@@ -1,7 +1,9 @@
 package me.nathan.futureclient.framework.auth.phase;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import ez.pogdog.yescom.api.Globals;
 import me.nathan.futureclient.client.altmanager.AccountException;
-import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -22,16 +24,16 @@ public class XBLToken {
             HttpURLConnection http = (HttpURLConnection) con;
             http.setDoOutput(true);
 
-            JSONObject request = new JSONObject();
-            request.put("RelyingParty","http://auth.xboxlive.com");
-            request.put("TokenType","JWT");
+            JsonObject request = new JsonObject();
+            request.add("RelyingParty", new JsonPrimitive("http://auth.xboxlive.com"));
+            request.add("TokenType", new JsonPrimitive("JWT"));
 
-            JSONObject props = new JSONObject();
-            props.put("AuthMethod","RPS");
-            props.put("SiteName","user.auth.xboxlive.com");
-            props.put("RpsTicket",token);
+            JsonObject props = new JsonObject();
+            props.add("AuthMethod", new JsonPrimitive("RPS"));
+            props.add("SiteName", new JsonPrimitive("user.auth.xboxlive.com"));
+            props.add("RpsTicket", new JsonPrimitive(token));
 
-            request.put("Properties", props);
+            request.add("Properties", props);
 
             String body = request.toString();
 
@@ -52,12 +54,12 @@ public class XBLToken {
             }
             String lines = reader.lines().collect(Collectors.joining());
 
-            JSONObject json = new JSONObject(lines);
-            if (json.keySet().contains("error")) {
-                throw new AccountException(json.getString("error") + ": " + json.getString("error_description"));
+            JsonObject json = Globals.JSON.parse(lines).getAsJsonObject();
+            if (json.has("error")) {
+                throw new AccountException(json.get("error").getAsString() + ": " + json.get("error_description").getAsString());
             }
-            String uhs = ((JSONObject)((JSONObject)json.get("DisplayClaims")).getJSONArray("xui").get(0)).getString("uhs");
-            return new XBLTokenType(json.getString("Token"), uhs);
+            String uhs = json.get("DisplayClaims").getAsJsonObject().get("xui").getAsJsonArray().get(0).getAsJsonObject().get("uhs").getAsString();
+            return new XBLTokenType(json.get("Token").getAsString(), uhs);
         } catch (IOException e) {
             e.printStackTrace();
             throw e;

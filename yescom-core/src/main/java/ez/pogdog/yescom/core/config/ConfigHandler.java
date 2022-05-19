@@ -2,8 +2,7 @@ package ez.pogdog.yescom.core.config;
 
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
-import org.yaml.snakeyaml.DumperOptions;
-import org.yaml.snakeyaml.Yaml;
+import ez.pogdog.yescom.api.Globals;
 
 import java.io.*;
 import java.util.*;
@@ -20,20 +19,12 @@ public class ConfigHandler extends Thread {
     private final List<IConfig> configurations = new ArrayList<>();
     private final Map<String, Map<String, Object>> values = new HashMap<>();
 
-    private final Yaml yaml;
-
     private final String configDirectory;
 
     private long lastAutoSaveTime;
 
     public ConfigHandler(String configDirectory) {
         this.configDirectory = configDirectory;
-
-        DumperOptions dumperOptions = new DumperOptions();
-        dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.FLOW); // Looks nicer imo
-        dumperOptions.setPrettyFlow(true);
-
-        yaml = new Yaml(dumperOptions);
 
         try {
             readConfiguration();
@@ -43,7 +34,6 @@ public class ConfigHandler extends Thread {
         }
 
         lastAutoSaveTime = System.currentTimeMillis() - 60000;
-
         start();
     }
 
@@ -81,7 +71,7 @@ public class ConfigHandler extends Thread {
                 if (file.isFile() && file.getName().endsWith(".yml")) {
                     logger.finest(String.format("Reading configuration %s.", file.getName()));
                     try (InputStream inputStream = new FileInputStream(file)) {
-                        Map<String, Object> map = yaml.load(inputStream);
+                        Map<String, Object> map = Globals.YAML.load(inputStream);
                         if (map != null /* && !map.containsValue(null) */) {
                             String name = file.getName().substring(0, file.getName().length() - 4);
                             values.put(name, map);
@@ -116,7 +106,7 @@ public class ConfigHandler extends Thread {
 
                 logger.finest(String.format("Dumping configuration %s (%s).", configuration.getFullIdentifier(), configuration));
                 OutputStream outputStream = new FileOutputStream(new File(configDirectory, configuration.getFullIdentifier() + ".yml"));
-                yaml.dump(values, new OutputStreamWriter(outputStream));
+                Globals.YAML.dump(values, new OutputStreamWriter(outputStream));
                 outputStream.close();
 
                 this.values.put(configuration.getFullIdentifier(), values);

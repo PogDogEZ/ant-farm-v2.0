@@ -1,5 +1,7 @@
 package ez.pogdog.yescom.core.util;
 
+import ez.pogdog.yescom.api.data.PlayerInfo;
+
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
@@ -101,6 +103,15 @@ public final class Serial {
                 throw new IOException(error);
             }
         }
+
+        /* ------------------------------ YesCom data ------------------------------ */
+
+        public static PlayerInfo readPlayerInfo(InputStream inputStream) throws IOException {
+            PlayerInfo info = new PlayerInfo(readUUID(inputStream));
+            info.username = readString(inputStream);
+            info.skinURL = readString(inputStream);
+            return info; // TODO: Sessions, etc
+        }
     }
 
     /**
@@ -164,6 +175,14 @@ public final class Serial {
                     .putLong(uuid.getLeastSignificantBits())
                     .array()
             );
+        }
+
+        /* ------------------------------ YesCom data ------------------------------ */
+
+        public static void writePlayerInfo(PlayerInfo info, OutputStream outputStream) throws IOException {
+            writeUUID(info.uuid, outputStream);
+            writeString(info.username, outputStream);
+            writeString(info.skinURL, outputStream);
         }
     }
 }

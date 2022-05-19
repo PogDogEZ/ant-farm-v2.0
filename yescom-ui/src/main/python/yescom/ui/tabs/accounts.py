@@ -368,6 +368,7 @@ class AccountsTab(QTabWidget):
         def __init__(self, parent: "AccountsTab.PlayersTree", player: Player):
             super().__init__(parent)
 
+            self.yescom = YesCom.getInstance()
             self.main_window = MainWindow.INSTANCE
 
             self.player = player
@@ -375,7 +376,7 @@ class AccountsTab(QTabWidget):
             self.setText(0, player.getUsername())
             self.setToolTip(0, "Player %s connected to %s:%i.\nRight click for options." %
                                (player.getUsername(), player.server.hostname, player.server.port))
-            # self.setIcon()  # TODO: Icon is player's skin's head
+            self.main_window.skin_downloader_thread.request_skin(player.getUUID(), lambda icon: self.setIcon(0, icon))
 
             for index in range(11):
                 self.addChild(QTreeWidgetItem(self, []))

@@ -2,12 +2,14 @@ package ez.pogdog.yescom.core.connection;
 
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
+import ez.pogdog.yescom.api.data.PlayerInfo;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
-import ez.pogdog.yescom.core.data.UUIDCache;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -37,25 +39,7 @@ public class PlayersHandler implements IConfig {
             ))
     );
 
-//    @Option.Ungettable
-//    @Option.Unsettable
-//    public final Option<Map<UUID, String>> PLAYER_NAMES = new Option<>( // TODO: Proper data handler
-//            "Player names",
-//            "Map of UUIDs to names.",
-//            new HashMap<>()
-//    );
-
-    private final Map<UUID, String> playerCache = new UUIDCache();
-
-    /*
-    @Option.Ungettable
-    @Option.Unsettable
-    public final Option<Set<PlayerInfo>> PLAYERS = new Option<>(
-            "Players",
-            "Information about all players.",
-            new HashSet<>()
-    );
-     */
+    public final Map<UUID, PlayerInfo> playerCache = Collections.synchronizedMap(new HashMap<>());
 
     @Override
     public String getIdentifier() {
@@ -86,11 +70,13 @@ public class PlayersHandler implements IConfig {
 
     /**
      * @param uuid The UUID to look up.
-     * @param default0 The default value to return if the UUID is not found.
+     * @param defaultValue The default value to return if the UUID is not found.
      * @return The name associated with the UUID.
      */
-    public String getName(UUID uuid, String default0) {
-        return playerCache.getOrDefault(uuid, default0);
+    public String getName(UUID uuid, String defaultValue) {
+        PlayerInfo info = playerCache.get(uuid);
+        if (info == null || info.username.isBlank()) return defaultValue;
+        return info.username;
     }
 
     /**
@@ -98,14 +84,6 @@ public class PlayersHandler implements IConfig {
      * @return The name associated with the UUID, null if not found.
      */
     public String getName(UUID uuid) {
-        return playerCache.get(uuid);
-    }
-
-    /**
-     * @param uuid The UUID.
-     * @param name The associated name.
-     */
-    public void setName(UUID uuid, String name) {
-        playerCache.put(uuid, name);
+        return getName(uuid, null);
     }
 }

@@ -1,5 +1,6 @@
 package ez.pogdog.yescom.core.connection;
 
+import com.github.steveice10.mc.auth.data.GameProfile;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.auth.service.AuthenticationService;
 import com.github.steveice10.mc.protocol.MinecraftProtocol;
@@ -35,6 +36,8 @@ import com.github.steveice10.packetlib.event.session.SessionAdapter;
 import com.github.steveice10.packetlib.packet.Packet;
 import com.github.steveice10.packetlib.tcp.TcpClientSession;
 import com.github.steveice10.packetlib.tcp.TcpSessionFactory;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.Angle;
@@ -51,8 +54,11 @@ import ez.pogdog.yescom.core.report.player.DeadReport;
 import ez.pogdog.yescom.core.report.player.HealthLogoutReport;
 import ez.pogdog.yescom.core.report.player.VisualRangeLogoutReport;
 import ez.pogdog.yescom.core.util.Chat;
+import ez.pogdog.yescom.api.Globals;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -493,20 +499,40 @@ public class Player implements IConfig {
                     UUID uuid = entry.getProfile().getId();
 
                     if (packet.getAction() == PlayerListEntryAction.ADD_PLAYER) {
-                        yesCom.playersHandler.setName(uuid, entry.getProfile().getName());
+                        // yesCom.playersHandler.setName(uuid, entry.getProfile().getName());
 
                         synchronized (server.onlinePlayers) {
-                            boolean joined = !server.onlinePlayers.containsKey(uuid);
-                            PlayerInfo info = server.onlinePlayers.computeIfAbsent(uuid, PlayerInfo::new);
+                            boolean joined = !server.onlinePlayers.contains(uuid);
+                            server.onlinePlayers.add(uuid);
+                            PlayerInfo info = yesCom.playersHandler.playerCache.computeIfAbsent(uuid, PlayerInfo::new);
+                            info.username = entry.getProfile().getName();
+                            if (info.skinURL.isBlank()) {
+                                GameProfile.Property texturesRaw = entry.getProfile().getProperty("textures");
+                                if (texturesRaw != null) {
+                                    try {
+                                        JsonObject root = Globals.JSON.parse(
+                                                new String(Base64.getDecoder().decode(texturesRaw.getValue()), StandardCharsets.UTF_8)
+                                        ).getAsJsonObject();
+                                        JsonObject textures = root.get("textures").getAsJsonObject();
+                                        JsonObject skin = textures.get("SKIN").getAsJsonObject();
+                                        info.skinURL = skin.get("url").getAsString();
+
+                                    } catch (Exception error) {
+                                        logger.warning("Couldn't read textures data: " + error.getMessage());
+                                        logger.throwing(getClass().getSimpleName(), "packetReceived", error);
+                                    }
+                                }
+                            }
                             info.gameMode = PlayerInfo.GameMode.valueOf(entry.getGameMode().name()); // FIXME: This is a hack
                             info.ping = entry.getPing();
+
                             if (joined) Emitters.ON_PLAYER_JOIN.emit(new Emitters.OnlinePlayerInfo(info, server));
                         }
 
                     } else if (packet.getAction() == PlayerListEntryAction.REMOVE_PLAYER) {
                         synchronized (server.onlinePlayers) {
-                            if (server.onlinePlayers.containsKey(uuid)) {
-                                PlayerInfo info = server.onlinePlayers.get(uuid);
+                            if (server.onlinePlayers.contains(uuid)) {
+                                PlayerInfo info = yesCom.playersHandler.playerCache.get(uuid);
                                 server.onlinePlayers.remove(uuid);
                                 Emitters.ON_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(info, server));
                             }
@@ -515,12 +541,12 @@ public class Player implements IConfig {
                     } else if (packet.getAction() == PlayerListEntryAction.UPDATE_GAMEMODE) {
                         synchronized (server.onlinePlayers) {
                             // Gets sent before ADD_PLAYER on constantiam.net, is this normal behaviour?
-                            if (server.onlinePlayers.containsKey(uuid)) {
-                                PlayerInfo info = server.onlinePlayers.get(uuid);
+                            if (server.onlinePlayers.contains(uuid)) {
+                                PlayerInfo info = yesCom.playersHandler.playerCache.get(uuid);
                                 PlayerInfo.GameMode gameMode = PlayerInfo.GameMode.valueOf(entry.getGameMode().name()); // FIXME: This is a hack
 
                                 if (info.gameMode != gameMode) {
-                                    info.gameMode = gameMode;
+                                    info.gameMode = gameMode; // FIXME: Doesn't have support for multiple servers
                                     Emitters.ON_PLAYER_GAMEMODE_UPDATE.emit(new Emitters.OnlinePlayerInfo(info, server));
                                 }
                             }
@@ -528,8 +554,8 @@ public class Player implements IConfig {
 
                     } else if (packet.getAction() == PlayerListEntryAction.UPDATE_LATENCY) {
                         synchronized (server.onlinePlayers) {
-                            if (server.onlinePlayers.containsKey(uuid)) {
-                                PlayerInfo info = server.onlinePlayers.get(uuid);
+                            if (server.onlinePlayers.contains(uuid)) {
+                                PlayerInfo info = yesCom.playersHandler.playerCache.get(uuid);
 
                                 if (info.ping != entry.getPing()) {
                                     info.ping = entry.getPing();

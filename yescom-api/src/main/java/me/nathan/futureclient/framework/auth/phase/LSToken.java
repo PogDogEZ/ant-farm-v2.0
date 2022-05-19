@@ -1,5 +1,11 @@
 package me.nathan.futureclient.framework.auth.phase;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonPrimitive;
+import ez.pogdog.yescom.api.Globals;
+import me.nathan.futureclient.client.altmanager.AccountException;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -9,10 +15,6 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
 import java.util.stream.Collectors;
-
-import me.nathan.futureclient.client.altmanager.AccountException;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 public class LSToken {
 
@@ -24,17 +26,17 @@ public class LSToken {
             http.setRequestMethod("POST"); // PUT is another valid option
             http.setDoOutput(true);
 
-            JSONObject request = new JSONObject();
-            request.put("RelyingParty","rp://api.minecraftservices.com/");
-            request.put("TokenType","JWT");
+            JsonObject request = new JsonObject();
+            request.add("RelyingParty",new JsonPrimitive("rp://api.minecraftservices.com/"));
+            request.add("TokenType",new JsonPrimitive("JWT"));
 
-            JSONObject props = new JSONObject();
-            props.put("SandboxId","RETAIL");
-            JSONArray userToks = new JSONArray();
-            userToks.put(token);
-            props.put("UserTokens", userToks);
+            JsonObject props = new JsonObject();
+            props.add("SandboxId", new JsonPrimitive("RETAIL"));
+            JsonArray userToks = new JsonArray();
+            userToks.add(new JsonPrimitive(token));
+            props.add("UserTokens", userToks);
 
-            request.put("Properties", props);
+            request.add("Properties", props);
 
             String body = request.toString();
 
@@ -58,12 +60,12 @@ public class LSToken {
             }
             String lines = reader.lines().collect(Collectors.joining());
 
-            JSONObject json = new JSONObject(lines);
-            if (json.keySet().contains("error")) {
-                throw new AccountException(json.getString("error") + ": " + json.getString("error_description"));
+            JsonObject json = Globals.JSON.parse(lines).getAsJsonObject();
+            if (json.has("error")) {
+                throw new AccountException(json.get("error").getAsString() + ": " + json.get("error_description").getAsString());
             }
-            String uhs = ((JSONObject)((JSONObject)json.get("DisplayClaims")).getJSONArray("xui").get(0)).getString("uhs");
-            return new LSTokenType(json.getString("Token"), uhs);
+            String uhs = json.get("DisplayClaims").getAsJsonObject().get("xui").getAsJsonArray().get(0).getAsJsonObject().get("uhs").getAsString();
+            return new LSTokenType(json.get("Token").getAsString(), uhs);
         } catch (IOException e) {
             e.printStackTrace();
             throw e;

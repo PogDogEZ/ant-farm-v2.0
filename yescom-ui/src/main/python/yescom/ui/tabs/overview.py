@@ -254,6 +254,8 @@ class OverviewTab(QTabWidget):
             self.setText(0, self.yescom.playersHandler.getName(info.uuid, str(info.uuid)))
             self.setToolTip(0, "An online player on %s:%i.\nRight click for options." % (server.hostname, server.port))
 
+            self.main_window.skin_downloader_thread.request_skin(info.uuid, lambda icon: self.setIcon(0, icon))
+
             for index in range(4):
                 self.addChild(QTreeWidgetItem(self, []))
 

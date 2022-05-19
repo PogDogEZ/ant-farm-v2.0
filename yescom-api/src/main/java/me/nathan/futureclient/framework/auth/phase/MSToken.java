@@ -1,7 +1,8 @@
 package me.nathan.futureclient.framework.auth.phase;
 
+import com.google.gson.JsonObject;
+import ez.pogdog.yescom.api.Globals;
 import me.nathan.futureclient.client.altmanager.AccountException;
-import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -54,11 +55,11 @@ public class MSToken {
             }
             String lines = reader.lines().collect(Collectors.joining());
 
-            JSONObject json = new JSONObject(lines);
+            JsonObject json = Globals.JSON.parse(lines).getAsJsonObject();
             if (json.keySet().contains("error")) {
-                throw new AccountException(json.getString("error") + ": " + json.getString("error_description"));
+                throw new AccountException(json.get("error").getAsString() + ": " + json.get("error_description").getAsString());
             }
-            return new TokenPair(json.getString("access_token"), json.getString("refresh_token"));
+            return new TokenPair(json.get("access_token").getAsString(), json.get("refresh_token").getAsString());
         } catch (IOException e) {
             e.printStackTrace();
             throw e;
@@ -102,11 +103,11 @@ public class MSToken {
             }
             String lines = reader.lines().collect(Collectors.joining());
 
-            JSONObject json = new JSONObject(lines);
-            if (json.keySet().contains("error")) {
-                throw new AccountException(json.getString("error") + ": " + json.getString("error_description"));
+            JsonObject json = Globals.JSON.parse(lines).getAsJsonObject();
+            if (json.has("error")) {
+                throw new AccountException(json.get("error").getAsString() + ": " + json.get("error_description").getAsString());
             }
-            return new TokenPair(json.getString("access_token"), json.getString("refresh_token"));
+            return new TokenPair(json.get("access_token").getAsString(), json.get("refresh_token").getAsString());
         } catch (IOException e) {
             e.printStackTrace();
             throw e;
