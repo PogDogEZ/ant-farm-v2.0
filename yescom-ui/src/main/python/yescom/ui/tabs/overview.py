@@ -2,6 +2,7 @@
 
 import math
 import time
+import webbrowser
 from typing import Any
 
 from PyQt5.QtGui import *
@@ -224,6 +225,10 @@ class OverviewTab(QTabWidget):
 
             view_player = menu.addAction("View player", lambda: self._view_player(player))
             view_player.setEnabled(player is not None)
+
+            menu.addSeparator()
+
+            menu.addAction("Open NameMC...", lambda: webbrowser.open("https://namemc.com/profile/%s" % info.uuid))
 
             menu.addSeparator()
 
