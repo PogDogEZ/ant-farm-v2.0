@@ -36,7 +36,6 @@ import com.github.steveice10.packetlib.event.session.SessionAdapter;
 import com.github.steveice10.packetlib.packet.Packet;
 import com.github.steveice10.packetlib.tcp.TcpClientSession;
 import com.github.steveice10.packetlib.tcp.TcpSessionFactory;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
@@ -192,11 +191,6 @@ public class Player implements IConfig {
      * Ticks this player.
      */
     public void tick() {
-        boolean autoReconnectReady = System.currentTimeMillis() - lastLoginTime > server.AUTO_RECONNECT_TIME.value;
-        boolean autoLogoutReady = System.currentTimeMillis() - lastAutoLogoutTime >= this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
-        if (AUTO_RECONNECT.value && server.canLogin() && !isConnected() && autoReconnectReady && autoLogoutReady)
-            connect();
-
         if (isConnected()) {
             // Update position
             if (positionDirty && angleDirty) {
@@ -220,6 +214,13 @@ public class Player implements IConfig {
                 oldPosition = position.clone();
                 oldAngle = angle.clone();
             }
+
+        } else {
+            boolean autoReconnectReady = System.currentTimeMillis() - lastLoginTime > server.AUTO_RECONNECT_TIME.value;
+            boolean autoLogoutReady = System.currentTimeMillis() - lastAutoLogoutTime >= this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
+            if (AUTO_RECONNECT.value && server.canLogin() && !server.onlinePlayers.contains(getUUID()) &&
+                    autoReconnectReady && autoLogoutReady)
+                connect();
         }
     }
 
@@ -568,7 +569,7 @@ public class Player implements IConfig {
 
                                 if (info.ping != entry.getPing()) {
                                     info.ping = entry.getPing();
-                                    Emitters.ON_PLAYER_PING_UPDATE.emit(new Emitters.OnlinePlayerInfo(info, server));
+                                    Emitters.ON_ANY_PLAYER_PING_UPDATE.emit(new Emitters.OnlinePlayerInfo(info, server));
                                 }
                             }
                         }
@@ -590,12 +591,12 @@ public class Player implements IConfig {
                     lastWorldTicks = packet.getWorldAge();
                 } else {
                     float newTPS = (packet.getWorldAge() - lastWorldTicks) / ((System.currentTimeMillis() - lastTimeUpdate) / 1000.0f);
+                    lastTimeUpdate = System.currentTimeMillis();
+                    lastWorldTicks = packet.getWorldAge();
                     if (newTPS <= 0.0f || newTPS >= 1000.0f || !Float.isFinite(newTPS)) return; // Damn
 
                     tickValues.add(newTPS);
                     while (tickValues.size() > 5) tickValues.remove(0);
-                    lastTimeUpdate = System.currentTimeMillis();
-                    lastWorldTicks = packet.getWorldAge();
 
                     float old = serverTPS;
 
