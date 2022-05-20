@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
  * A single configuration option.
  * @param <T> The type of the option.
  */
-public class Option<T> { // TODO: Names, descriptions, etc.
+public class Option<T> {
 
     public final String name;
     public final String description;

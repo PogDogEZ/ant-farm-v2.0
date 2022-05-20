@@ -107,6 +107,7 @@ class SkinDownloaderThread(QThread):
 
                         except Exception as error:
                             logger.fine("Couldn't download skin for %s: %r." % (uuid, error))
+                            self._requests[uuid] = (int(time.time()) + 20, callbacks)  # Try again in 20 seconds
 
             QThread.msleep(250)
 

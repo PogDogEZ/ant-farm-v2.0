@@ -395,7 +395,7 @@ public class Server implements IConfig {
      * @return How long have we been connected to this server?
      */
     public int getConnectionTime() {
-        return (int)(System.currentTimeMillis() - connectionTime);
+        return (int)((System.currentTimeMillis() - connectionTime) / 1000);
     }
 
     /**

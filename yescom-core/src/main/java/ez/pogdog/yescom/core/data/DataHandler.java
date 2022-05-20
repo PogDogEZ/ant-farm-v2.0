@@ -106,6 +106,7 @@ public class DataHandler extends Thread implements IConfig {
         logger.finer("Writing player cache...");
         long start = System.currentTimeMillis();
         OutputStream outputStream = new FileOutputStream(playersFile);
+        Serial.Write.writeInteger(yesCom.playersHandler.playerCache.size(), outputStream);
         for (PlayerInfo info : yesCom.playersHandler.playerCache.values()) Serial.Write.writePlayerInfo(info, outputStream);
         outputStream.close();
         logger.finer(String.format("Wrote %d player cache entries in %dms.", yesCom.playersHandler.playerCache.size(),

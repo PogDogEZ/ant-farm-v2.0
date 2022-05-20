@@ -83,10 +83,11 @@ def main(args: List[str], jar_path: str) -> None:
     threading.Thread(target=_initialise, args=(args, init_loop)).start()
     init_loop.exec()
 
+    splash_screen.movie.stop()
     os.remove(temp_extract)
 
     main_window = MainWindow()
-    main_window.setFixedSize(int(screen.width() / 2), int(screen.height() / 2))
+    main_window.resize(int(screen.width() / 2), int(screen.height() / 2))
     main_window.move(screen.rect().center() - main_window.rect().center())
     main_window.setWindowState(main_window.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
     main_window.activateWindow()
