@@ -75,6 +75,11 @@ class OverviewTab(QTabWidget):
         self.uptime_label.setToolTip("How long we've been connected to this server for.")
         info_layout.addWidget(self.uptime_label)
 
+        self.render_dist_label = QLabel(self)
+        self.render_dist_label.setText("Render distance: 0 / 0 (0 chunks)")
+        self.render_dist_label.setToolTip("Estimated server render distance.")
+        info_layout.addWidget(self.render_dist_label)
+
         self.queryrate_label = QLabel(self)
         self.queryrate_label.setText("Queryrate: 0.0qps")
         self.queryrate_label.setToolTip("The current rate of queries being sent to the server.")
@@ -130,6 +135,7 @@ class OverviewTab(QTabWidget):
         ping = 0.0
         tslp = "0"
         uptime = "00:00:00"
+        render_distance = 0
         queryrate = 0.0
 
         if current is not None:
@@ -142,14 +148,19 @@ class OverviewTab(QTabWidget):
                     tslp = str(tslp)
                 else:
                     tslp = "<%i" % (math.ceil(tslp / 50) * 50)
-                uptime = time.strftime("%H:%M:%S", time.gmtime(current.getConnectionTime() / 1000))
+                uptime = time.strftime("%H:%M:%S", time.gmtime(current.getConnectionTime()))
                 queryrate = current.getQPS()
+
+            render_distance = current.getRenderDistance()
 
         self.address_label.setText("Address: %s" % address)
         self.tickrate_label.setText("Tickrate: %.1ftps" % tickrate)
         self.ping_label.setText("Ping: %.1fms" % ping)
         self.tslp_label.setText("TSLP: %sms" % tslp)
         self.uptime_label.setText("Uptime: %s" % uptime)
+        self.render_dist_label.setText("Render distance: %i / %i (%i chunks)" % (
+            max(0, (render_distance - 1) // 2), render_distance, render_distance ** 2,
+        ))
         self.queryrate_label.setText("Queryrate: %.1fqps" % queryrate)
 
     def _on_server_changed(self) -> None:
@@ -193,6 +204,9 @@ class OverviewTab(QTabWidget):
             self.main_window = MainWindow.INSTANCE
 
             self.setHeaderHidden(True)
+            self.setColumnCount(2)
+
+            self.itemChanged.connect(lambda item: self.resizeColumnToContents(0))
 
         # ------------------------------ Events ------------------------------ #
 
@@ -272,27 +286,40 @@ class OverviewTab(QTabWidget):
             self.server = server
             self.info = info
 
-            name = self.yescom.playersHandler.getName(info.uuid, str(info.uuid))  # When would this not resolve?
+            uuid = info.uuid  # Crazy optimisations
+            name = self.yescom.playersHandler.getName(uuid, str(uuid))  # When would this not resolve?
+            known = server.hasPlayer(uuid)
 
             self.tooltip = self.tooltip % (name, server.hostname, server.port)
             self.setText(0, name)
             self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
+            if known:
+                font = self.font(0)
+                font.setBold(True)
+                self.setFont(0, font)
 
-            self.main_window.skin_downloader_thread.request_skin(info.uuid, lambda icon: self.setIcon(0, icon))
+            self.main_window.skin_downloader_thread.request_skin(uuid, lambda icon: self.setIcon(0, icon))
 
             for index in range(4):
                 self.addChild(QTreeWidgetItem(self, []))
 
-            self.child(0).setText(0, "UUID: %s" % info.uuid)
-            self.child(1).setText(0, "Known: %s" % server.hasPlayer(info.uuid))
+            self.child(0).setText(0, "UUID:")
+            self.child(0).setText(1, str(uuid))
+            self.child(0).setToolTip(0, "The UUID of the player.")
+            self.child(0).setToolTip(1, self.child(0).text(1))
 
-            self._on_gamemode_update(Emitters.OnlinePlayerInfo(self.info, self.server))
+            self.child(1).setText(0, "Known:")
+            self.child(1).setText(1, str(known))
+            self.child(1).setToolTip(0, "Is this a player that we \"control\" / know?")
+            self.child(1).setToolTip(1, self.child(1).text(1))
+
+            self.child(2).setText(0, "Ping:")
+            self.child(2).setToolTip(0, "The latency that the server estimates this player has.")
             self._on_ping_update(Emitters.OnlinePlayerInfo(self.info, self.server))
 
-            self.child(0).setToolTip(0, "The UUID of the player.")
-            self.child(1).setToolTip(0, "Is this a player that we \"control\" / know?")
-            self.child(2).setToolTip(0, "The latency that the server estimates this player has.")
+            self.child(3).setText(0, "Gamemode:")
             self.child(3).setToolTip(0, "The gamemode of the player.")
+            self._on_gamemode_update(Emitters.OnlinePlayerInfo(self.info, self.server))
 
             # TODO: More information, are they being tracked, current session time, etc...
 
@@ -310,14 +337,18 @@ class OverviewTab(QTabWidget):
         def _on_gamemode_update(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
             if online_player_info.info == self.info and online_player_info.server == self.server:
                 info = online_player_info.info
-                self.child(3).setText(0, "Gamemode: %s" % str(info.gameMode).lower())
                 self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
+
+                self.child(3).setText(1, str(info.gameMode).lower())
+                self.child(3).setToolTip(1, self.child(3).text(1))
 
         def _on_ping_update(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
             if online_player_info.info == self.info and online_player_info.server == self.server:
                 info = online_player_info.info
-                self.child(2).setText(0, "Ping: %ims" % info.ping)
                 self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
+
+                self.child(2).setText(1, "%ims" % info.ping)
+                self.child(2).setToolTip(1, self.child(2).text(1))
 
 
 from ..main import MainWindow

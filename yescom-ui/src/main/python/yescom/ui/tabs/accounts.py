@@ -251,8 +251,11 @@ class AccountsTab(QTabWidget):
             self.main_window = MainWindow.INSTANCE
 
             self.setHeaderHidden(True)
+            self.setColumnCount(2)
 
             self._connect_thread: Union[AccountsTab.ConnectThread, None] = None
+
+            self.itemChanged.connect(lambda item: self.resizeColumnToContents(0))
 
         def contextMenuEvent(self, event: QContextMenuEvent) -> None:
             current = self.currentItem()
@@ -369,7 +372,8 @@ class AccountsTab(QTabWidget):
         Information about a player that we "control".
         """
 
-        tooltip = "%s\nServer: %s:%i\nConnected: %%s\nTPS: %%.1ftps\nPing: %%ims\nHealth: %%.1f\nRight click for more options."
+        connected_tooltip = "%s\nServer: %s:%i\nConnected: %%s\nTPS: %%.1ftps\nPing: %%ims\nHealth: %%.1f\nRight click for more options."
+        disconnected_tooltip = "%s\nServer: %s:%i\nConnected: %%s\nRight click for more options."
 
         def __init__(self, parent: "AccountsTab.PlayersTree", player: Player):
             super().__init__(parent)
@@ -379,35 +383,52 @@ class AccountsTab(QTabWidget):
 
             self.player = player
 
-            self.tooltip = self.tooltip % (player.getUsername(), player.server.hostname, player.server.port)
+            username = player.getUsername()  # Local lookups are a ton faster
+            uuid = player.getUUID()
+            hostname = player.server.hostname
+            port = player.server.port
+
+            self.connected_tooltip = self.connected_tooltip % (username, hostname, port)
+            self.disconnected_tooltip = self.disconnected_tooltip % (username, hostname, port)
+
             self.setText(0, player.getUsername())  # TODO: Change colour if connected or not
-            self.setToolTip(0, self.tooltip % (False, 20, 0, 20))
-            self.main_window.skin_downloader_thread.request_skin(player.getUUID(), lambda icon: self.setIcon(0, icon))
+            self.main_window.skin_downloader_thread.request_skin(uuid, lambda icon: self.setIcon(0, icon))
 
             for index in range(11):
                 self.addChild(QTreeWidgetItem(self, []))
 
-            self.child(0).setText(0, "UUID: %s" % self.player.getUUID())
+            self.child(0).setText(0, "UUID:")
+            self.child(0).setText(1, str(uuid))
             self.child(0).setToolTip(0, "The player's UUID.")
+            self.child(0).setToolTip(1, self.child(0).text(1))
 
-            self._on_login(player)
-            self._on_position_update(player)
-            self._on_health_update(player)
-            self._on_server_stats_update(player)
-
+            self.child(1).setText(0, "Connected:")
             self.child(1).setToolTip(0, "Is the player connected to the server?")
+            self._on_login(player)
 
+            self.child(2).setText(0, "Position:")
             self.child(2).setToolTip(0, "The current position of the player.")
+            self.child(3).setText(0, "Angle:")
             self.child(3).setToolTip(0, "The current angle (yaw, pitch) of the player.")
+            self.child(4).setText(0, "Dimension:")
             self.child(4).setToolTip(0, "The dimension the player is currently in.")
+            self._on_position_update(player)
 
+            self.child(5).setText(0, "Health:")
             self.child(5).setToolTip(0, "The current health of the player.")
+            self.child(6).setText(0, "Hunger:")
             self.child(6).setToolTip(0, "The current hunger level of the player.")
+            self.child(7).setText(0, "Saturation:")
             self.child(7).setToolTip(0, "The current saturation level of the player.")
+            self._on_health_update(player)
 
+            self.child(8).setText(0, "Server tickrate:")
             self.child(8).setToolTip(0, "The current TPS that this player estimates the server is running at.")
+            self.child(9).setText(0, "Server ping:")
             self.child(9).setToolTip(0, "The ping that the server estimates this player has.")
+            self.child(10).setText(0, "Chunks:")
             self.child(10).setToolTip(0, "The number of chunks in the render distance of this player.")
+            self._on_server_stats_update(player)
 
             # TODO: Last position if logged out
             # TODO: Failed connection attempts
@@ -427,55 +448,69 @@ class AccountsTab(QTabWidget):
         def _on_server_change(self) -> None:
             self.setHidden(self.main_window.current_server != self.player.server)
 
-        def _on_login(self, player: Player) -> None:
+        def _on_login(self, player: Player) -> None:  # Not strictly on login, who cares though
             if player == self.player:
-                self.setToolTip(0, self.tooltip % (player.isConnected(), player.getServerTPS(), player.getServerPing(),
-                                                   player.getHealth()))
-                self.child(1).setText(0, "Connected: %s" % player.isConnected())
+                connected = player.isConnected()
+                if connected:
+                    self.setToolTip(0, self.connected_tooltip % (
+                        True, player.getServerTPS(), player.getServerPing(), player.getHealth(),
+                    ))
+                else:
+                    self.setToolTip(0, self.disconnected_tooltip % False)
 
-                self._on_position_update(player)
-                self._on_health_update(player)
-                self._on_server_stats_update(player)
+                self.child(1).setText(1, str(connected))
+                self.child(1).setToolTip(1, self.child(1).text(1))
+
+                self.child(2).setHidden(not connected)
+                self.child(3).setHidden(not connected)
+                self.child(4).setHidden(not connected)
+                self.child(5).setHidden(not connected)
+                self.child(6).setHidden(not connected)
+                self.child(7).setHidden(not connected)
+                self.child(8).setHidden(not connected)
+                self.child(9).setHidden(not connected)
+                self.child(10).setHidden(not connected)
 
         def _on_logout(self, player_logout: Emitters.PlayerLogout) -> None:
             self._on_login(player_logout.player)
 
         def _on_position_update(self, player: Player) -> None:
             if player == self.player:
-                position = player.getPosition()  # Local lookups are so much faster in Python
+                position = player.getPosition()
                 angle = player.getAngle()
 
-                self.child(2).setHidden(not player.isConnected())
-                self.child(2).setText(0, "Position: %.1f, %.1f, %.1f" % (position.getX(), position.getY(), position.getZ()))
-                self.child(3).setHidden(not player.isConnected())
-                self.child(3).setText(0, "Angle: %.1f, %.1f" % (angle.getYaw(), angle.getPitch()))
-                self.child(4).setHidden(not player.isConnected())
-                self.child(4).setText(0, "Dimension: %s" % str(player.getDimension()).lower())
+                self.child(2).setText(1, "%.1f, %.1f, %.1f" % (position.getX(), position.getY(), position.getZ()))
+                self.child(2).setToolTip(1, self.child(2).text(1))
+                self.child(3).setText(1, "%.1f, %.1f" % (angle.getYaw(), angle.getPitch()))
+                self.child(3).setToolTip(1, self.child(3).text(1))
+                self.child(4).setText(1, str(player.getDimension()).lower())
+                self.child(4).setToolTip(1, self.child(4).text(1))
 
         def _on_health_update(self, player: Player) -> None:
             if player == self.player:
-                self.setToolTip(0, self.tooltip % (player.isConnected(), player.getServerTPS(), player.getServerPing(),
-                                                   player.getHealth()))
+                self.setToolTip(0, self.connected_tooltip % (
+                    player.isConnected(), player.getServerTPS(), player.getServerPing(), player.getHealth(),
+                ))
 
-                self.child(5).setHidden(not player.isConnected())
-                self.child(5).setText(0, "Health: %.1f" % player.getHealth())
-                self.child(6).setHidden(not player.isConnected())
-                self.child(6).setText(0, "Hunger: %i" % player.getHunger())
-                self.child(7).setHidden(not player.isConnected())
-                self.child(7).setText(0, "Saturation: %.1f" % player.getSaturation())
+                self.child(5).setText(1, "%.1f" % player.getHealth())
+                self.child(5).setToolTip(1, self.child(5).text(1))
+                self.child(6).setText(1, "%i" % player.getHunger())
+                self.child(6).setToolTip(1, self.child(6).text(1))
+                self.child(7).setText(1, "%.1f" % player.getSaturation())
+                self.child(7).setToolTip(1, self.child(7).text(1))
 
         def _on_server_stats_update(self, player: Player) -> None:
             if player == self.player:
-                self.setToolTip(0, self.tooltip % (player.isConnected(), player.getServerTPS(), player.getServerPing(),
-                                                   player.getHealth()))
+                self.setToolTip(0, self.connected_tooltip % (
+                    player.isConnected(), player.getServerTPS(), player.getServerPing(), player.getHealth(),
+                ))
 
-                self.child(8).setHidden(not player.isConnected())
-                self.child(8).setText(0, "Server tickrate: %.1ftps" % player.getServerTPS())
-                self.child(9).setHidden(not player.isConnected())
-                self.child(9).setText(0, "Server ping: %ims" % player.getServerPing())
-                self.child(10).setHidden(not player.isConnected())
-                self.child(10).setText(0, "Chunks: %i (render distance %i)" %
-                                          (len(player.loadedChunks), (len(player.loadedChunks) ** .5 - 1) // 2))
+                self.child(8).setText(1, "%.1ftps" % player.getServerTPS())
+                self.child(8).setToolTip(1, self.child(8).text(1))
+                self.child(9).setText(1, "%ims" % player.getServerPing())
+                self.child(9).setToolTip(1, self.child(9).text(1))
+                self.child(10).setText(1, "%i" %  len(player.loadedChunks))
+                self.child(10).setToolTip(1, self.child(10).text(1))
 
     class ConnectThread(QThread):
         """

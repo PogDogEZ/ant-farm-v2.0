@@ -3,6 +3,7 @@ package ez.pogdog.yescom.core.connection;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
+import ez.pogdog.yescom.api.data.ChunkPosition;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.config.IConfig;
@@ -90,6 +91,7 @@ public class Server implements IConfig {
     private final List<Player> players = new CopyOnWriteArrayList<>();
 
     private boolean connected;
+    private int renderDistance;
     private float tickrate;
     private int tslp;
     private float ping;
@@ -100,6 +102,7 @@ public class Server implements IConfig {
 
     private long connectionTime; // The time that we first logged into the server at (reset if we aren't connected)
     private long lastLoginTime; // The last time we logged into the server at
+    private long lastRenderDistanceTime;
     private long lastStatsTime;
     private int lastHighTslp;
 
@@ -115,6 +118,7 @@ public class Server implements IConfig {
 
         connectionTime = System.currentTimeMillis();
         lastLoginTime = System.currentTimeMillis() - GLOBAL_LOGIN_TIME.value;
+        lastRenderDistanceTime = System.currentTimeMillis() - 5000;
         lastStatsTime = System.currentTimeMillis();
         lastHighTslp = 0;
 
@@ -162,6 +166,7 @@ public class Server implements IConfig {
         // logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));
 
         int connectedCount = 0;
+        int newRenderDistance = System.currentTimeMillis() - lastRenderDistanceTime > 5000 ? 0 : renderDistance;
         tickrate = 0.0f;
         tslp = 30000;
         ping = 0.0f;
@@ -171,6 +176,21 @@ public class Server implements IConfig {
             player.tick();
             if (player.isConnected()) {
                 ++connectedCount;
+
+                if (newRenderDistance == 0) { // Don't recalculate if we don't need to
+                    float playerRenderDistance = (float)Math.sqrt(player.loadedChunks.size());
+                    // Only trust this render distance estimate if:
+                    //  1. The player is spawned in
+                    //  2. The player hasn't received a chunk packet in 500ms
+                    //  3. The player has received a packet in under 500ms
+                    //  4. The render distance is an integer
+                    if (player.isSpawned() && player.getTimeSinceLastChunkPacket() > 500 && player.getTSLP() < 500 &&
+                            playerRenderDistance % 1.0f == 0.0f) {
+                        // Further check, if we have a bigger estimate already, don't set
+                        if (playerRenderDistance > newRenderDistance) newRenderDistance = (int)playerRenderDistance;
+                    }
+                }
+
                 tickrate += player.getServerTPS();
                 if (player.getTSLP() < tslp) {
                     lowestTSLP = player;
@@ -184,6 +204,11 @@ public class Server implements IConfig {
 
         if (connectedCount > 0) {
             connected = true;
+            if (newRenderDistance > 0 && newRenderDistance != renderDistance) { // Worked out new render distance?
+                logger.fine(String.format("%s:%d render distance is %d.", hostname, port, newRenderDistance));
+                renderDistance = newRenderDistance;
+                lastRenderDistanceTime = System.currentTimeMillis();
+            }
             if (!wasConnected) {
                 logger.info(String.format("Established connection to %s:%d.", hostname, port));
                 Emitters.ON_CONNECTION_ESTABLISHED.emit(this);
@@ -382,6 +407,16 @@ public class Server implements IConfig {
         return yesCom.playersHandler.isTrusted(uuid);
     }
 
+    /**
+     * @return Is the provided chunk loaded by a player?
+     */
+    public boolean isLoadedByPlayer(ChunkPosition position) {
+        for (Player player : players) {
+            if (player.loadedChunks.contains(position)) return true;
+        }
+        return false;
+    }
+
     /* ------------------------------ Setters and getters ------------------------------ */
 
     /**
@@ -396,6 +431,13 @@ public class Server implements IConfig {
      */
     public int getConnectionTime() {
         return (int)((System.currentTimeMillis() - connectionTime) / 1000);
+    }
+
+    /**
+     * @return The estimated render distance (*2 + 1) for this server.
+     */
+    public int getRenderDistance() {
+        return renderDistance;
     }
 
     /**

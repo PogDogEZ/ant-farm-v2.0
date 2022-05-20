@@ -141,6 +141,7 @@ public class Player implements IConfig {
     private boolean positionDirty;
     private boolean angleDirty;
 
+    private long lastChunkPacket;
     private long lastPacketTime;
     private long lastTimeUpdate;
     private long lastWorldTicks;
@@ -171,6 +172,7 @@ public class Player implements IConfig {
         positionDirty = false;
         angleDirty = false;
 
+        lastChunkPacket = System.currentTimeMillis();
         lastPacketTime = System.currentTimeMillis();
         lastTimeUpdate = -1L;
         lastWorldTicks = 0L;
@@ -313,6 +315,13 @@ public class Player implements IConfig {
      */
     public boolean isSpawned() {
         return currentTeleportID >= 0 && dimension != null && !loadedChunks.isEmpty() && !tickValues.isEmpty();
+    }
+
+    /**
+     * @return The time since the last chunk packet was received, in milliseconds.
+     */
+    public int getTimeSinceLastChunkPacket() {
+        return (int)(System.currentTimeMillis() - lastChunkPacket);
     }
 
     public UUID getUUID() {
@@ -624,6 +633,7 @@ public class Player implements IConfig {
             } else if (event.getPacket() instanceof ServerChunkDataPacket) {
                 ServerChunkDataPacket packet = event.getPacket();
                 loadedChunks.add(new ChunkPosition(packet.getColumn().getX(), packet.getColumn().getZ()));
+                lastChunkPacket = System.currentTimeMillis(); // FIXME: Moving across chunks, big updates, etc
 
                 Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);
 
@@ -693,6 +703,7 @@ public class Player implements IConfig {
             serverPing = 0;
             serverTPS = 0.0f;
 
+            lastChunkPacket = System.currentTimeMillis();
             lastTimeUpdate = -1L;
             lastWorldTicks = 0L;
 
