@@ -1,5 +1,7 @@
 package ez.pogdog.yescom.core.query;
 
+import ez.pogdog.yescom.api.data.Dimension;
+
 /**
  * Provides some sort of information.
  */
@@ -25,5 +27,14 @@ public interface IQuery<T extends IQueryHandle> {
     @SuppressWarnings("unchecked")
     default void cancel(T handle) {
         handle.cancel(this);
+    }
+
+    /**
+     * @return Has the query expired?
+     */
+    boolean isExpired();
+
+    default Dimension getDimension(IQueryHandle<? extends IQuery> handle) {
+        return handle.getDimension();
     }
 }

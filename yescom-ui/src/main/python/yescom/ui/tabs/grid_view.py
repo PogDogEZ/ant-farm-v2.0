@@ -3,7 +3,7 @@
 from PyQt5.QtWidgets import *
 
 
-class GridViewTab(QTabWidget):
+class GridViewTab(QWidget):
     """
     A tab that shows a grid view of loaded chunks and tracked players.
     """

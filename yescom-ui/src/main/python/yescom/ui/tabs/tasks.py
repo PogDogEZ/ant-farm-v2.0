@@ -3,7 +3,7 @@
 from PyQt5.QtWidgets import *
 
 
-class TasksTab(QTabWidget):
+class TasksTab(QWidget):
     """
     Allows the user to manage tasks running on YesCom.
     """

@@ -24,6 +24,7 @@ import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.Angle;
 import ez.pogdog.yescom.api.data.BlockPosition;
+import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
@@ -44,6 +45,7 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -55,14 +57,14 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     private final Logger logger = Logging.getLogger("yescom.core.query.invalidmove");
 
     /**
-     * Valid storages / containers that can be used.
+     * Valid storages / containers that can be used. There are more, I can't be bothered to add them :p.
      * 23 - dispenser.
      * 54 - chest.
      * 130 - ender chest.
      * 154 - hopper.
      * 158 - dropper.
      */
-    public final List<Integer> VALID_STORAGES = Arrays.asList(23, 54, 130, 154, 158);
+    public final List<Integer> VALID_STORAGES = Arrays.asList(23, 54, 130, 154, 158); // TODO: Make this an option I guess
 
     /* ------------------------------ Options ------------------------------ */
 
@@ -95,7 +97,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
     /* ------------------------------ Other fields ------------------------------ */
 
-    private final Map<Player, PlayerHandle> available = new HashMap<>();
+    private final Map<Player, PlayerHandle> available = new ConcurrentHashMap<>();
 
     private final Queue<InvalidMoveQuery> waiting = new PriorityQueue<>();
     private final Set<InvalidMoveQuery> cancelled = new HashSet<>();
@@ -104,12 +106,16 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     private final Map<InvalidMoveQuery, Consumer<InvalidMoveQuery>> callbacks = new HashMap<>();
 
     public final Server server;
+    private final Dimension dimension;
 
     private float queriesPerTick = 0.0f;
 
-    public InvalidMoveHandle(Server server) {
-        logger.fine(String.format("New invalid move handle for server %s:%d.", server.hostname, server.port));
+    public InvalidMoveHandle(Server server, Dimension dimension) {
         this.server = server;
+        this.dimension = dimension;
+
+        logger.fine(String.format("New invalid move handle for server %s:%d.", server.hostname, server.port));
+
         YesCom.getInstance().configHandler.addConfiguration(this);
 
         for (Player player : this.server.getPlayers()) available.put(player, new PlayerHandle(player));
@@ -127,6 +133,8 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         synchronized (this) {
             outer: while (!waiting.isEmpty()) {
                 InvalidMoveQuery query = waiting.peek();
+                if (query.isExpired()) continue;
+
                 for (PlayerHandle handle : available.values()) {
                     if (handle.canQuery() && handle.canHandle(query)) {
                         handle.dispatch(query);
@@ -144,7 +152,9 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
     @Override
     public boolean handles(IQuery<?> query) {
-        return query instanceof InvalidMoveQuery && server.INVALID_MOVE_ENABLED.value;
+        // Note: we can still get queries assigned to us with different dimensions, so we also need to check for that :p
+        return (query instanceof InvalidMoveQuery && query.getDimension(this) == dimension &&
+                server.INVALID_MOVE_ENABLED.value);
     }
 
     @Override
@@ -171,6 +181,11 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     }
 
     @Override
+    public Dimension getDimension() {
+        return dimension;
+    }
+
+    @Override
     public float getQPS() {
         return queriesPerTick * 20.0f;
     }
@@ -187,7 +202,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
     @Override
     public String getIdentifier() {
-        return "invalid-move-handle";
+        return String.format("invalid-move-handle-%s", dimension.name().toLowerCase());
     }
 
     @Override
@@ -251,7 +266,8 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         private int closeWindowID = -1;
 
         public PlayerHandle(Player player) {
-            logger.finer(String.format("Registered new invalid move handle for player %s.", player.getUsername()));
+            logger.finer(String.format("Registered new invalid move handle for player %s (dim %s).", player.getUsername(),
+                    dimension));
             this.player = player;
         }
 
@@ -261,6 +277,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
          *  - Dequeueing and processing queries.
          */
         private void tick() {
+            // Expect response within <our ping in ticks> + 2 more ticks for safety
             float minExpectedTicks = (40.0f + Math.max(1.0f, player.getServerPing()) / 50.0f) * (20.0f / Math.max(1.0f, player.getServerTPS()));
             if (++ticksSinceTeleport > minExpectedTicks && (!loadedQueryMap.isEmpty() || !unloadedQueryMap.isEmpty())) {
                 logger.warning(String.format("%s packet loss (5) ticks: %d, queued: %d.", player.getUsername(),
@@ -281,6 +298,13 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             }
 
             if (player.isSpawned()) {
+                // At first will have incorrect players assigned to this handle, so we need to check their dimension
+                // when they eventually spawn in
+                if (player.getDimension() != dimension) {
+                    onLogout();
+                    return;
+                }
+
                 if (bestStorage == null && !confirmedStorages.isEmpty()) {
                     synchronized (confirmedStorages) {
                         for (BlockPosition storage : new ArrayList<>(confirmedStorages)) {
@@ -330,31 +354,6 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
          * @param packet The packet.
          */
         private void onPacketIn(Packet packet) {
-            // Understanding how the loaded chunk detection works (for dispatching explanation, see below):
-            //  - Server receives the place block packet:
-            //    > Sends an open window packet if successful
-            //    > Sends a block update packet regardless
-            //  - Server receives invalid move into the chunk:
-            //    > If unloaded, an internal teleport occurs to our old position, no teleport event is fired
-            //    > If loaded, a teleport event is fired and NCP closes our window, we receive a close window packet
-            //    > We receive a teleport packet regardless
-            //  - Server receives teleport confirm packet
-            // Assuming this all goes to plan, we should have a correct mapping of window ID -> teleport ID, and further
-            // teleport ID -> query.
-            // Ways in which this can go wrong:
-            //  - Anti-timer plugin stops our movement packet:
-            //    > Detected when we receive an open window packet with no following teleport packet
-            //    > The fix is to re-align the teleport ID to window ID mappings and reschedule the dropped query
-            //  - Anti-cheat stops our place block packet:
-            //    > Detected when we receive a block change packet with no prior open window packet
-            //    > If the previous chunk was unloaded, the storage will still be open, so the detection will have gone
-            //      through correctly.
-            //    > If the previous chunk was loaded, we can't be sure of the state of it.
-            //    > Re-align the teleport ID to window ID mappings, reschedule if required.
-            //  - Paper's packet in limit stops our place block packet (1.33333 on constantiam.net):
-            //    > Detected when we receive a teleport packet with no prior block change packet
-            //    > Same as the point above
-
             if (!(packet instanceof ServerChatPacket)) ++packetsElapsed; // FIXME: Can Paper be configured to not use async chat?
 
             handleStorage(packet);
@@ -369,7 +368,9 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
          * When this player logs out, we need to handle it correctly.
          */
         private void onLogout() {
-            logger.finer(String.format("Unregistered invalid move handle for player %s.", player.getUsername()));
+            available.remove(player);
+            logger.finer(String.format("Unregistered invalid move handle for player %s (dim %s).", player.getUsername(),
+                    dimension));
 
             logger.finer(String.format("Rescheduling %d queries.", loadedQueryMap.size() + unloadedQueryMap.size()));
             for (InvalidMoveQuery query : loadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
@@ -503,6 +504,31 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
          * Handle query state.
          */
         private void handleState(Packet packet) {
+            // Understanding how the loaded chunk detection works (for dispatching explanation, see below):
+            //  - Server receives the place block packet:
+            //    > Sends an open window packet if successful
+            //    > Sends a block update packet regardless
+            //  - Server receives invalid move into the chunk:
+            //    > If unloaded, an internal teleport occurs to our old position, no teleport event is fired
+            //    > If loaded, a teleport event is fired and NCP closes our window, we receive a close window packet
+            //    > We receive a teleport packet regardless
+            //  - Server receives teleport confirm packet
+            // Assuming this all goes to plan, we should have a correct mapping of window ID -> teleport ID, and further
+            // teleport ID -> query.
+            // Ways in which this can go wrong:
+            //  - Anti-timer plugin stops our movement packet:
+            //    > Detected when we receive an open window packet with no following teleport packet
+            //    > The fix is to re-align the teleport ID to window ID mappings and reschedule the dropped query
+            //  - Anti-cheat stops our place block packet:
+            //    > Detected when we receive a block change packet with no prior open window packet
+            //    > If the previous chunk was unloaded, the storage will still be open, so the detection will have gone
+            //      through correctly.
+            //    > If the previous chunk was loaded, we can't be sure of the state of it.
+            //    > Re-align the teleport ID to window ID mappings, reschedule if required.
+            //  - Paper's packet in limit stops our place block packet (1.33333 on constantiam.net):
+            //    > Detected when we receive a teleport packet with no prior block change packet
+            //    > Same as the point above
+
             if (packet instanceof ServerOpenWindowPacket) {
                 ServerOpenWindowPacket openWindow = (ServerOpenWindowPacket)packet;
 
@@ -801,7 +827,8 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
          * @return Can this player actually handle the provided query?
          */
         public boolean canHandle(InvalidMoveQuery query) {
-            if (query.dimension != player.getDimension()) return false; // Can't handle queries in other dimensions
+            // Can't handle queries in other dimensions, might still happen (idk), better safe than sorry though
+            if (query.dimension != player.getDimension()) return false;
             // FIXME: Use estimated ping instead, it's more accurate
             // How many ticks should we expect the server to respond in?
             float expectedTicks = Math.max(1.0f, player.getServerPing()) / 50.0f;

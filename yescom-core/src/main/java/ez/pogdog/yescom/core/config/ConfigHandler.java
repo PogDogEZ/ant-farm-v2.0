@@ -3,6 +3,7 @@ package ez.pogdog.yescom.core.config;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.Globals;
+import ez.pogdog.yescom.core.ITickable;
 
 import java.io.*;
 import java.util.*;
@@ -11,7 +12,7 @@ import java.util.logging.Logger;
 /**
  * Handles configuration for elements of YesCom.
  */
-public class ConfigHandler extends Thread {
+public class ConfigHandler implements ITickable {
 
     private final Logger logger = Logging.getLogger("yescom.core.config");
     private final YesCom yesCom = YesCom.getInstance();
@@ -26,6 +27,8 @@ public class ConfigHandler extends Thread {
     public ConfigHandler(String configDirectory) {
         this.configDirectory = configDirectory;
 
+        yesCom.slowAsyncUpdater.tickables.add(this);
+
         try {
             readConfiguration();
         } catch (IOException error) {
@@ -34,29 +37,21 @@ public class ConfigHandler extends Thread {
         }
 
         lastAutoSaveTime = System.currentTimeMillis() - 60000;
-        start();
     }
 
     @Override
-    public void run() {
-        while (yesCom.isRunning()) {
+    public void tick() {
+        if (System.currentTimeMillis() - lastAutoSaveTime > 120000) {
+            // new Thread(() -> {
             try {
-                Thread.sleep(2500);
-            } catch (InterruptedException ignored) {
+                saveConfiguration(); // Honestly don't think this is slow enough to warrant a separate thread
+            } catch (IOException error) {
+                logger.warning(String.format("Couldn't save configuration: %s.", error.getMessage()));
+                logger.throwing(getClass().getSimpleName(), "run", error);
+                return; // Don't spam console
             }
-
-            if (System.currentTimeMillis() - lastAutoSaveTime > 120000) {
-                // new Thread(() -> {
-                try {
-                    saveConfiguration(); // Honestly don't think this is slow enough to warrant a separate thread
-                } catch (IOException error) {
-                    logger.warning(String.format("Couldn't save configuration: %s.", error.getMessage()));
-                    logger.throwing(getClass().getSimpleName(), "run", error);
-                    return; // Don't spam console
-                }
-                // }).start();
-                lastAutoSaveTime = System.currentTimeMillis();
-            }
+            // }).start();
+            lastAutoSaveTime = System.currentTimeMillis();
         }
     }
 

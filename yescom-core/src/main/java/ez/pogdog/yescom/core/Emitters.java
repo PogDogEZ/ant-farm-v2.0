@@ -24,7 +24,7 @@ public class Emitters {
      */
     public static final Emitter<?> ON_POST_TICK = new Emitter<>(null);
 
-    /* ------------------------------ Accounts ------------------------------ */
+    /* ------------------------------ YesCom accounts ------------------------------ */
 
     /**
      * Fired when an account is added.
@@ -41,7 +41,7 @@ public class Emitters {
      */
     public static final Emitter<IAccount> ON_ACCOUNT_REMOVED = new Emitter<>(IAccount.class);
 
-    /* ------------------------------ Players ------------------------------ */
+    /* ------------------------------ YesCom players ------------------------------ */
 
     /**
      * Fired when a player is added.
@@ -86,6 +86,38 @@ public class Emitters {
      */
     public static final Emitter<Player> ON_PLAYER_REMOVED = new Emitter<>(Player.class);
 
+    /* ------------------------------ All players ------------------------------ */
+
+    /**
+     * Fired when any player is added to the player cache.
+     */
+    public static final Emitter<PlayerInfo> ON_NEW_PLAYER_CACHED = new Emitter<>(PlayerInfo.class);
+
+    /**
+     * Fired when a player is just trusted / untrusted.
+     */
+    public static final Emitter<PlayerInfo> ON_TRUST_STATE_CHANGED = new Emitter<>(PlayerInfo.class);
+
+    /**
+     * Fired when any player joins the server.
+     */
+    public static final Emitter<OnlinePlayerInfo> ON_ANY_PLAYER_JOIN = new Emitter<>(OnlinePlayerInfo.class);
+
+    /**
+     * Fired when any player leaves the server.
+     */
+    public static final Emitter<OnlinePlayerInfo> ON_ANY_PLAYER_LEAVE = new Emitter<>(OnlinePlayerInfo.class);
+
+    /**
+     * Fired when any player's gamemode changes.
+     */
+    public static final Emitter<OnlinePlayerInfo> ON_ANY_PLAYER_GAMEMODE_UPDATE = new Emitter<>(OnlinePlayerInfo.class);
+
+    /**
+     * Fired when any player's ping changes.
+     */
+    public static final Emitter<OnlinePlayerInfo> ON_ANY_PLAYER_PING_UPDATE = new Emitter<>(OnlinePlayerInfo.class);
+
     /* ------------------------------ Server ------------------------------ */
 
     /**
@@ -97,26 +129,6 @@ public class Emitters {
      * Fired when connection is fully lost to a server.
      */
     public static final Emitter<Server> ON_CONNECTION_LOST = new Emitter<>(Server.class);
-
-    /**
-     * Fired when any player joins the server.
-     */
-    public static final Emitter<OnlinePlayerInfo> ON_PLAYER_JOIN = new Emitter<>(OnlinePlayerInfo.class);
-
-    /**
-     * Fired when any player leaves the server.
-     */
-    public static final Emitter<OnlinePlayerInfo> ON_PLAYER_LEAVE = new Emitter<>(OnlinePlayerInfo.class);
-
-    /**
-     * Fired when a player's gamemode changes.
-     */
-    public static final Emitter<OnlinePlayerInfo> ON_PLAYER_GAMEMODE_UPDATE = new Emitter<>(OnlinePlayerInfo.class);
-
-    /**
-     * Fired when a player's ping changes.
-     */
-    public static final Emitter<OnlinePlayerInfo> ON_PLAYER_PING_UPDATE = new Emitter<>(OnlinePlayerInfo.class);
 
     /* ------------------------------ Reporting ------------------------------ */
 

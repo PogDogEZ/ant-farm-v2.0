@@ -2,17 +2,19 @@
 
 from PyQt5.QtWidgets import *
 
+from ez.pogdog.yescom import YesCom
 
-class OptionsTab(QWidget):
+
+class DebugTab(QWidget):
     """
-    Allows you to set options for YesCom.
+    Secret debug tab :o.
     """
 
     def __init__(self, parent: "MainWindow") -> None:
         super().__init__(parent)
 
-    def __repr__(self) -> str:
-        return "<OptionsTab() at %x>" % id(self)
+        self.yescom = YesCom.getInstance()
+        self.main_window = parent
 
 
 from ..main import MainWindow

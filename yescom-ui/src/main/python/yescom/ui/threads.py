@@ -2,7 +2,7 @@
 
 import requests
 import time
-from typing import Callable, Dict, List, Tuple
+from typing import Dict, Tuple
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -54,6 +54,8 @@ class SkinDownloaderThread(QThread):
     Downloads skins in the background, for the icon view.
     """
 
+    skin_resolved = pyqtSignal(tuple)
+
     def __init__(self, parent: "MainWindow") -> None:
         super().__init__(parent)
 
@@ -61,27 +63,28 @@ class SkinDownloaderThread(QThread):
 
         self._cache_mutex = QMutex()
 
-        self._requests: Dict[UUID, Tuple[int, Tuple[Callable[[QIcon], None], ...]]] = {}
+        self._requests: Dict[UUID, int] = {}
         self._cache: Dict[UUID, Tuple[int, QPixmap]] = {}
 
     def run(self) -> None:
+        player_cache = self.yescom.playersHandler.getPlayerCache()
         while self.yescom.isRunning():
             cant_download = 0
 
             while len(self._requests) > cant_download:
-                uuid, (download_time, callbacks) = self._requests.popitem()  # Should maintain insertion order
+                uuid, download_time = next(iter(self._requests.items()))  # Should maintain insertion order
 
                 if download_time > time.time():  # Can't download this one right now
                     cant_download += 1
-                    self._requests[uuid] = (download_time, callbacks)
 
-                elif not uuid in self.yescom.playersHandler.playerCache:
+                elif not uuid in player_cache:
                     cant_download += 1
-                    self._requests[uuid] = (int(time.time()) + 10, callbacks)  # Try again in 10 seconds
+                    self._requests[uuid] += 10  # Try again in 10 seconds
                     logger.fine("Can't download skin for %s as they have not been cached yet." % uuid)
 
                 else:
-                    player_info = self.yescom.playersHandler.playerCache[uuid]
+                    del self._requests[uuid]
+                    player_info = player_cache[uuid]
 
                     if player_info.skinURL:
                         try:
@@ -98,16 +101,21 @@ class SkinDownloaderThread(QThread):
                                 self._cache[uuid] = (int(time.time()) + 1800, player_head)
                                 self._cache_mutex.unlock()
 
-                                for callback in callbacks:
-                                    callback(QIcon(player_head))
+                                self.skin_resolved.emit((uuid, QIcon(player_head)))
                                 del player_skin
 
                             else:
                                 raise Exception("Status code %i." % request.status_code)
 
                         except Exception as error:
+                            cant_download += 1
+                            self._requests[uuid] += 20  # Try again in 20 seconds
                             logger.fine("Couldn't download skin for %s: %r." % (uuid, error))
-                            self._requests[uuid] = (int(time.time()) + 20, callbacks)  # Try again in 20 seconds
+
+                    else:
+                        cant_download += 1
+                        self._requests[uuid] += 10
+                        logger.fine("Can't download skin for %s as their skin URL has not been cached yet." % uuid)
 
             QThread.msleep(250)
 
@@ -134,31 +142,27 @@ class SkinDownloaderThread(QThread):
 
             self._cache_mutex.unlock()
 
-    def request_skin(self, uuid: UUID, callback: Callable[[QIcon], None]) -> None:
+    def request_skin(self, uuid: UUID) -> None:
         """
         Requests that a skin be downloaded for the given UUID.
 
         :param uuid: The UUID to download the skin for.
-        :param callback: The callback that will accept the QIcon.
         """
 
         self._cache_mutex.lock()
         if uuid in self._cache:
             expiry, player_head = self._cache[uuid]
             self._cache[uuid] = (expiry + 1800, player_head)
-            callback(QIcon(player_head))
             self._cache_mutex.unlock()
+            self.skin_resolved.emit((uuid, QIcon(player_head)))
             return
         self._cache_mutex.unlock()
 
-        callbacks = (callback,)
-        if uuid in self._requests:  # Already requested
-            callbacks += self._requests[uuid][1]
         # Download immediately, it's fine if we reset a delayed download, this can happen if we have requested the skin
         # for the accounts tab and then the overview tab. This is actually better as by the time we're requesting skins
-        # for the overview tab, we'll have logged in and therefore will have the URL, so downloading immedatiely will
+        # for the overview tab, we'll have logged in and therefore will have the URL, so downloading immediately will
         # make the request appear faster to the user
-        self._requests[uuid] = (int(time.time()) - 1, callbacks)
+        self._requests[uuid] = int(time.time()) - 1
 
 
 from .main import MainWindow

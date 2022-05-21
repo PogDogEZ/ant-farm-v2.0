@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import time
 from typing import Union
 
 from PyQt5.QtCore import *
@@ -46,10 +45,12 @@ class MainWindow(QMainWindow):
     player_health_update = pyqtSignal(object)
     player_server_stats_update = pyqtSignal(object)
 
-    player_joined = pyqtSignal(object)
-    player_left = pyqtSignal(object)
-    player_gamemode_update = pyqtSignal(object)
-    player_ping_update = pyqtSignal(object)
+    new_player_cached = pyqtSignal(object)
+    trust_state_changed = pyqtSignal(object)
+    any_player_joined = pyqtSignal(object)
+    any_player_left = pyqtSignal(object)
+    any_player_gamemode_update = pyqtSignal(object)
+    any_player_ping_update = pyqtSignal(object)
 
     # ------------------------------ Properties ------------------------------ #
 
@@ -134,6 +135,7 @@ class MainWindow(QMainWindow):
         logger.fine("Setting up signals...")
         # Need to do this cos we want the certain processes to be carried out in the right thread
 
+        # FIXME: If we're just gonna do this, there's really no point in having some fancy PyEmitter system, at least in the UI part
         emitters.ON_ACCOUNT_ADDED.connect(self.account_added.emit)
         emitters.ON_ACCOUNT_ERROR.connect(self.account_error.emit)
 
@@ -150,10 +152,12 @@ class MainWindow(QMainWindow):
         emitters.ON_CONNECTION_ESTABLISHED.connect(self.connection_established.emit)
         emitters.ON_CONNECTION_LOST.connect(self.connection_lost.emit)
 
-        emitters.ON_PLAYER_JOIN.connect(self.player_joined.emit)
-        emitters.ON_PLAYER_LEAVE.connect(self.player_left.emit)
-        emitters.ON_PLAYER_GAMEMODE_UPDATE.connect(self.player_gamemode_update.emit)
-        emitters.ON_PLAYER_PING_UPDATE.connect(self.player_ping_update.emit)
+        emitters.ON_NEW_PLAYER_CACHED.connect(self.new_player_cached.emit)
+        emitters.ON_TRUST_STATE_CHANGED.connect(self.trust_state_changed.emit)
+        emitters.ON_ANY_PLAYER_JOIN.connect(self.any_player_joined.emit)
+        emitters.ON_ANY_PLAYER_LEAVE.connect(self.any_player_left.emit)
+        emitters.ON_ANY_PLAYER_GAMEMODE_UPDATE.connect(self.any_player_gamemode_update.emit)
+        emitters.ON_ANY_PLAYER_PING_UPDATE.connect(self.any_player_ping_update.emit)
 
     def _setup_top_bar(self, main_layout: QVBoxLayout) -> None:
         logger.fine("Setting up top bar...")
@@ -187,6 +191,7 @@ class MainWindow(QMainWindow):
         logger.fine("Setting up tabs...")
 
         self.tab_widget = QTabWidget(self.central_widget)
+        self.tab_widget.setTabBarAutoHide(True)
 
         self.overview_tab = OverviewTab(self)
         self.tab_widget.addTab(self.overview_tab, "Overview")
@@ -194,8 +199,8 @@ class MainWindow(QMainWindow):
         self.grid_view_tab = GridViewTab(self)
         self.tab_widget.addTab(self.grid_view_tab, "Grid View")
 
-        self.accounts_tab = AccountsTab(self)
-        self.tab_widget.addTab(self.accounts_tab, "Accounts")
+        self.players_tab = PlayersTab(self)
+        self.tab_widget.addTab(self.players_tab, "Players")
 
         self.tasks_tab = TasksTab(self)
         self.tab_widget.addTab(self.tasks_tab, "Tasks")
@@ -269,7 +274,7 @@ class MainWindow(QMainWindow):
         message_box.exec()
 
 
-from .tabs.accounts import AccountsTab
+from .tabs.players import PlayersTab
 from .tabs.chat_and_logs import ChatAndLogsTab
 from .tabs.graphs import GraphsTab
 from .tabs.grid_view import GridViewTab

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 
+import datetime
 import math
 import time
 import webbrowser
-from typing import Any
+from typing import Any, Tuple
 
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
@@ -19,7 +20,7 @@ from ez.pogdog.yescom.core.connection import Player, Server
 logger = Logging.getLogger("yescom.ui.tabs.overview")
 
 
-class OverviewTab(QTabWidget):
+class OverviewTab(QWidget):
     """
     Provides an overview of the server's information.
     """
@@ -27,21 +28,21 @@ class OverviewTab(QTabWidget):
     def __init__(self, parent: "MainWindow") -> None:
         super().__init__(parent)
 
-        self.main_window = MainWindow.INSTANCE
+        self.main_window = parent
 
         self._last_update = time.time()
 
         self._setup_tab()
 
-        parent.tick.connect(self._on_tick)
+        self.main_window.tick.connect(self._on_tick)
 
-        parent.server_changed.connect(self._on_server_changed)
+        self.main_window.server_changed.connect(self._on_server_changed)
         # Hack, to make sure we enable the "Disconnect all" button
-        parent.connection_established.connect(self._on_server_changed)
-        parent.connection_lost.connect(self._on_server_changed)
+        self.main_window.connection_established.connect(self._on_server_changed)
+        self.main_window.connection_lost.connect(self._on_server_changed)
 
-        parent.player_joined.connect(self._on_player_joined)
-        parent.player_left.connect(self._on_player_left)
+        self.main_window.any_player_joined.connect(self._on_player_joined)
+        self.main_window.any_player_left.connect(self._on_player_left)
 
     def __repr__(self) -> str:
         return "<OverviewTab() at %x>" % id(self)
@@ -84,6 +85,8 @@ class OverviewTab(QTabWidget):
         self.queryrate_label.setText("Queryrate: 0.0qps")
         self.queryrate_label.setToolTip("The current rate of queries being sent to the server.")
         info_layout.addWidget(self.queryrate_label)
+
+        info_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
         # TODO: More information (trackers, etc)
         # TODO: Current (in game) time?
@@ -148,7 +151,7 @@ class OverviewTab(QTabWidget):
                     tslp = str(tslp)
                 else:
                     tslp = "<%i" % (math.ceil(tslp / 50) * 50)
-                uptime = time.strftime("%H:%M:%S", time.gmtime(current.getConnectionTime()))
+                uptime = str(datetime.timedelta(seconds=current.getConnectionTime()))
                 queryrate = current.getQPS()
 
             render_distance = current.getRenderDistance()
@@ -166,7 +169,7 @@ class OverviewTab(QTabWidget):
     def _on_server_changed(self) -> None:
         count = 0
         if self.main_window.current_server is not None:
-            count = len(self.main_window.current_server.onlinePlayers)
+            count = len(self.main_window.current_server.getOnlinePlayers())
 
         self.online_players_label.setText("Online players (%i):" % count)
         self.disconnect_all_button.setEnabled(
@@ -192,7 +195,7 @@ class OverviewTab(QTabWidget):
 
     # ------------------------------ Classes ------------------------------ #
 
-    class OnlinePlayersTree(QTreeWidget):
+    class OnlinePlayersTree(QTreeWidget):  # TODO: Offline players view somewhere, search by username
         """
         Tree widget containing information about players currently online.
         """
@@ -203,10 +206,14 @@ class OverviewTab(QTabWidget):
             self.yescom = YesCom.getInstance()
             self.main_window = MainWindow.INSTANCE
 
+            self.dirty = False
+
             self.setHeaderHidden(True)
             self.setColumnCount(2)
 
-            self.itemChanged.connect(lambda item: self.resizeColumnToContents(0))
+            self.itemChanged.connect(lambda item: self._set_dirty())
+
+            self.main_window.tick.connect(self._on_tick)
 
         # ------------------------------ Events ------------------------------ #
 
@@ -233,11 +240,11 @@ class OverviewTab(QTabWidget):
             trusted = menu.addAction("Trusted", lambda: self._toggle_trusted(info.uuid))
             trusted.setCheckable(True)
             trusted.setChecked(self.yescom.playersHandler.isTrusted(info.uuid))
-            trusted.setEnabled(player is None)  # Can't untrust players that we "own"
+            # trusted.setEnabled(player is None)  # Can't untrust players that we "own" <- uh, yeah we can, dumbass
 
             menu.addSeparator()
 
-            view_player = menu.addAction("View player", lambda: self._view_player(player))
+            view_player = menu.addAction("View account", lambda: self._view_account(player))
             view_player.setEnabled(player is not None)
 
             menu.addSeparator()
@@ -254,7 +261,15 @@ class OverviewTab(QTabWidget):
 
             menu.exec(event.globalPos())
 
+        def _on_tick(self) -> None:
+            if self.dirty:
+                self.resizeColumnToContents(0)
+                self.dirty = False
+
         # ------------------------------ Utility methods ------------------------------ #
+
+        def _set_dirty(self) -> None:
+            self.dirty = True
 
         def _toggle_trusted(self, uuid: UUID) -> None:
             if self.yescom.playersHandler.isTrusted(uuid):
@@ -262,13 +277,14 @@ class OverviewTab(QTabWidget):
             else:
                 self.yescom.playersHandler.addTrusted(uuid)
 
-        def _view_player(self, player: Player) -> None:
+        def _view_account(self, player: Player) -> None:
             if self.main_window.current_server != player.server:
-                self.main_window.current_server = player.server  # Switch to the player's server if we're not viewing it
+                # Switch to the player's server if we're not viewing it, weird that we wouldn't be though
+                self.main_window.current_server = player.server
 
-            self.main_window.accounts_tab.select(player)
-            self.main_window.accounts_tab.expand(player)
-            self.main_window.set_selected(self.main_window.accounts_tab)
+            self.main_window.players_tab.select_account(player)
+            self.main_window.players_tab.expand_account(player)
+            self.main_window.set_selected(self.main_window.players_tab)
 
     class OnlinePlayerItem(QTreeWidgetItem):
         """
@@ -298,9 +314,10 @@ class OverviewTab(QTabWidget):
                 font.setBold(True)
                 self.setFont(0, font)
 
-            self.main_window.skin_downloader_thread.request_skin(uuid, lambda icon: self.setIcon(0, icon))
+            self.main_window.skin_downloader_thread.skin_resolved.connect(self._on_skin_resolved)
+            self.main_window.skin_downloader_thread.request_skin(uuid)
 
-            for index in range(4):
+            for index in range(7):
                 self.addChild(QTreeWidgetItem(self, []))
 
             self.child(0).setText(0, "UUID:")
@@ -313,23 +330,62 @@ class OverviewTab(QTabWidget):
             self.child(1).setToolTip(0, "Is this a player that we \"control\" / know?")
             self.child(1).setToolTip(1, self.child(1).text(1))
 
-            self.child(2).setText(0, "Ping:")
-            self.child(2).setToolTip(0, "The latency that the server estimates this player has.")
-            self._on_ping_update(Emitters.OnlinePlayerInfo(self.info, self.server))
+            self.child(2).setText(0, "Trusted:")
+            self.child(2).setToolTip(0, "Is this a player that we trust?")
+            self._on_trust_state_changed(info)
 
-            self.child(3).setText(0, "Gamemode:")
-            self.child(3).setToolTip(0, "The gamemode of the player.")
-            self._on_gamemode_update(Emitters.OnlinePlayerInfo(self.info, self.server))
+            self.child(3).setText(0, "Ping:")
+            self.child(3).setToolTip(0, "The latency that the server estimates this player has.")
+            self._on_ping_update(Emitters.OnlinePlayerInfo(info, self.server))
+
+            self.child(4).setText(0, "Gamemode:")
+            self.child(4).setToolTip(0, "The gamemode of the player.")
+            self._on_gamemode_update(Emitters.OnlinePlayerInfo(info, self.server))
+
+            self.child(5).setText(0, "First seen:")
+            self.child(5).setToolTip(0, "The first time that YesCom saw the player (across all servers).")
+            self.child(5).setText(1, str(datetime.datetime.fromtimestamp(info.firstSeen // 1000)))
+            self.child(5).setToolTip(1, self.child(5).text(1))
+
+            self.child(6).setText(0, "Online for:")
+            self.child(6).setToolTip(0, "How long the player has been online for.")
 
             # TODO: More information, are they being tracked, current session time, etc...
 
+            self.main_window.tick.connect(self._on_tick)
             self.main_window.server_changed.connect(self._on_server_change)
 
-            self.main_window.player_gamemode_update.connect(self._on_gamemode_update)
-            self.main_window.player_ping_update.connect(self._on_ping_update)
+            self.main_window.trust_state_changed.connect(self._on_trust_state_changed)
+            self.main_window.any_player_gamemode_update.connect(self._on_gamemode_update)
+            self.main_window.any_player_ping_update.connect(self._on_ping_update)
 
         def __eq__(self, other: Any) -> bool:
             return isinstance(other, OverviewTab.OnlinePlayerItem) and other.info == self.info
+
+        # ------------------------------ Events ------------------------------ #
+
+        def _on_skin_resolved(self, resolved: Tuple[UUID, QIcon]) -> None:
+            if resolved[0] == self.info.uuid:
+                self.setIcon(0, resolved[1])
+
+        def _on_tick(self) -> None:
+            current = self.main_window.current_server
+            if self.isExpanded() and current is not None:  # No need to update if we're not expanded
+                self.child(6).setText(1, str(datetime.timedelta(
+                    seconds=current.getOnlineTime(self.info.uuid) // 1000,
+                )))
+                self.child(6).setToolTip(1, self.child(5).text(1))
+
+        def _on_trust_state_changed(self, info: PlayerInfo) -> None:
+            if info == self.info:
+                trusted = self.yescom.playersHandler.isTrusted(info.uuid)
+                if trusted:
+                    self.setForeground(0, QColor(0, 117, 163))  # TODO: Configurable
+                else:
+                    self.setForeground(0, QApplication.palette().text())
+
+                self.child(2).setText(1, str(trusted))
+                self.child(2).setToolTip(1, self.child(2).text(1))
 
         def _on_server_change(self) -> None:
             self.setHidden(self.main_window.current_server != self.server)
@@ -339,16 +395,16 @@ class OverviewTab(QTabWidget):
                 info = online_player_info.info
                 self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
 
-                self.child(3).setText(1, str(info.gameMode).lower())
-                self.child(3).setToolTip(1, self.child(3).text(1))
+                self.child(4).setText(1, str(info.gameMode).lower())
+                self.child(4).setToolTip(1, self.child(4).text(1))
 
         def _on_ping_update(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
             if online_player_info.info == self.info and online_player_info.server == self.server:
                 info = online_player_info.info
                 self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
 
-                self.child(2).setText(1, "%ims" % info.ping)
-                self.child(2).setToolTip(1, self.child(2).text(1))
+                self.child(3).setText(1, "%ims" % info.ping)
+                self.child(3).setToolTip(1, self.child(3).text(1))
 
 
 from ..main import MainWindow

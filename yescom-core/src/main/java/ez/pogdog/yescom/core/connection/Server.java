@@ -1,10 +1,21 @@
 package ez.pogdog.yescom.core.connection;
 
+import com.github.steveice10.mc.auth.data.GameProfile;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
+import com.github.steveice10.mc.protocol.data.game.PlayerListEntry;
+import com.github.steveice10.mc.protocol.data.game.PlayerListEntryAction;
+import com.github.steveice10.mc.protocol.packet.ingame.server.ServerPlayerListEntryPacket;
+import com.github.steveice10.packetlib.event.session.PacketReceivedEvent;
+import com.github.steveice10.packetlib.event.session.SessionAdapter;
+import com.google.gson.JsonObject;
 import ez.pogdog.yescom.YesCom;
+import ez.pogdog.yescom.api.Globals;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.ChunkPosition;
+import ez.pogdog.yescom.api.data.Dimension;
+import ez.pogdog.yescom.api.data.PlayerInfo;
 import ez.pogdog.yescom.core.Emitters;
+import ez.pogdog.yescom.core.ITickable;
 import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
@@ -12,10 +23,16 @@ import ez.pogdog.yescom.core.query.IQuery;
 import ez.pogdog.yescom.core.query.IQueryHandle;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
 import ez.pogdog.yescom.core.report.connection.HighTSLPReport;
+import ez.pogdog.yescom.core.servers.IServerBehaviour;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -25,7 +42,7 @@ import java.util.logging.Logger;
 /**
  * Represents a server that we are connected to. We can be connected to multiple servers.
  */
-public class Server implements IConfig {
+public class Server implements IConfig, ITickable {
 
     private final Logger logger = Logging.getLogger("yescom.core.connection");
     private final YesCom yesCom = YesCom.getInstance();
@@ -81,14 +98,22 @@ public class Server implements IConfig {
     /* ------------------------------ Other fields ------------------------------ */
 
     public final List<IQueryHandle<?>> handles = new ArrayList<>(); // TODO: More specific for loaded queries
-    public final Set<UUID> onlinePlayers = new HashSet<>();
+    public final List<IServerBehaviour> behaviours = new ArrayList<>();
+
+    public final ServerSessionAdapter adapter = new ServerSessionAdapter();
 
     public final String hostname;
     public final int port;
 
-    public final InvalidMoveHandle invalidMoveHandle; // Direct reference for ease, it's hacky but who cares
+    // Direct references for ease, it's hacky but who cares
+    public final InvalidMoveHandle overworldInvalidMoveHandle;
+    public final InvalidMoveHandle netherInvalidMoveHandle;
+    public final InvalidMoveHandle endInvalidMoveHandle;
 
+    private final Map<UUID, Long> onlinePlayers = new HashMap<>();
     private final List<Player> players = new CopyOnWriteArrayList<>();
+
+    private final PlayerInfo.Server serverInfo;
 
     private boolean connected;
     private int renderDistance;
@@ -109,12 +134,30 @@ public class Server implements IConfig {
     public Server(String hostname, int port) {
         this.hostname = hostname;
         this.port = port;
+
+        serverInfo = new PlayerInfo.Server(hostname, port);
+
+        yesCom.tickables.add(this);
         yesCom.configHandler.addConfiguration(this);
 
-        invalidMoveHandle = new InvalidMoveHandle(this);
-        handles.add(invalidMoveHandle);
+        overworldInvalidMoveHandle = new InvalidMoveHandle(this, Dimension.OVERWORLD);
+        netherInvalidMoveHandle = new InvalidMoveHandle(this, Dimension.NETHER);
+        endInvalidMoveHandle = new InvalidMoveHandle(this, Dimension.END);
 
-        logger.fine(String.format("%s handles for server %s:%d.", handles.size(), hostname, port));
+        handles.add(overworldInvalidMoveHandle);
+        handles.add(netherInvalidMoveHandle);
+        handles.add(endInvalidMoveHandle);
+
+        logger.fine(String.format("%d handle(s) for server %s:%d.", handles.size(), hostname, port));
+
+        for (IServerBehaviour behaviour : ServiceLoader.load(IServerBehaviour.class)) {
+            if (behaviour.isValid(this)) {
+                logger.fine(String.format("Registered valid behaviour %s for %s:%d.", behaviour, hostname, port));
+                behaviour.apply(this);
+                behaviours.add(behaviour);
+            }
+        }
+        logger.fine(String.format("%d behaviour(s) for server %s:%d.", behaviours.size(), hostname, port));
 
         connectionTime = System.currentTimeMillis();
         lastLoginTime = System.currentTimeMillis() - GLOBAL_LOGIN_TIME.value;
@@ -146,6 +189,7 @@ public class Server implements IConfig {
     /**
      * Ticks this server.
      */
+    @Override
     public void tick() {
         Set<IAccount> accounts = yesCom.accountHandler.getAccounts();
         if (!accounts.isEmpty()) {
@@ -235,8 +279,7 @@ public class Server implements IConfig {
 
             synchronized (onlinePlayers) { // If we aren't connected then we don't know anything about the online players
                 if (!onlinePlayers.isEmpty()) {
-                    for (UUID uuid : onlinePlayers)
-                        Emitters.ON_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(yesCom.playersHandler.playerCache.get(uuid), this));
+                    for (UUID uuid : new ArrayList<>(onlinePlayers.keySet())) handleDisconnect(uuid);
                     onlinePlayers.clear();
                 }
             }
@@ -318,12 +361,20 @@ public class Server implements IConfig {
     }
 
     /**
+     * @param player The player.
+     * @return Does this server have this player?
+     */
+    public boolean hasPlayer(Player player) {
+        return players.contains(player);
+    }
+
+    /**
      * @param username The username (case-insensitive) of the player.
      * @return Is the player with that username one of our own?
      */
     public boolean hasPlayer(String username) {
         for (Player player : players) {
-            if (player.getUsername().equalsIgnoreCase(username)) return true;
+            if (player.getUsername().equalsIgnoreCase(username)) return player.isConnected();
         }
         return false;
     }
@@ -334,7 +385,7 @@ public class Server implements IConfig {
      */
     public boolean hasPlayer(UUID uuid) { // FIXME: Make these lookups faster
         for (Player player : players) {
-            if (player.getUUID().equals(uuid)) return true;
+            if (player.getUUID().equals(uuid)) return player.isConnected();
         }
         return false;
     }
@@ -417,7 +468,60 @@ public class Server implements IConfig {
         return false;
     }
 
+    /**
+     * Handles when any player connects to the server.
+     * @param uuid The UUID of the player that connected.
+     */
+    public void handleConnect(UUID uuid) {
+        synchronized (onlinePlayers) {
+            if (!onlinePlayers.containsKey(uuid)) {
+                PlayerInfo info = yesCom.playersHandler.getInfo(uuid);
+                if (!info.servers.contains(serverInfo)) info.servers.add(serverInfo);
+
+                onlinePlayers.put(uuid, System.currentTimeMillis());
+                Emitters.ON_ANY_PLAYER_JOIN.emit(new Emitters.OnlinePlayerInfo(info, this));
+            }
+        }
+    }
+
+    /**
+     * Handles when any player disconnects from this server.
+     * @param uuid The UUID of the player that disconnected.
+     */
+    public void handleDisconnect(UUID uuid) {
+        synchronized (onlinePlayers) {
+            if (onlinePlayers.containsKey(uuid)) {
+                PlayerInfo info = yesCom.playersHandler.getInfo(uuid);
+                if (!info.servers.contains(serverInfo)) info.servers.add(serverInfo);
+
+                info.sessions.add(new PlayerInfo.Session(serverInfo, onlinePlayers.get(uuid), System.currentTimeMillis()));
+                onlinePlayers.remove(uuid);
+                Emitters.ON_ANY_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(info, this));
+            }
+        }
+    }
+
+    /**
+     * @return Is the player with the provided UUID online?
+     */
+    public boolean isOnline(UUID uuid) {
+        return onlinePlayers.containsKey(uuid);
+    }
+
+    /**
+     * @param uuid The UUID of the player to check.
+     * @return How long the player has been online for, in milliseconds.
+     */
+    public long getOnlineTime(UUID uuid) {
+        if (!onlinePlayers.containsKey(uuid)) return 0;
+        return System.currentTimeMillis() - onlinePlayers.getOrDefault(uuid, System.currentTimeMillis());
+    }
+
     /* ------------------------------ Setters and getters ------------------------------ */
+
+    public Map<UUID, Long> getOnlinePlayers() {
+        return onlinePlayers;
+    }
 
     /**
      * @return Are there any accounts connected to the server currently?
@@ -480,5 +584,78 @@ public class Server implements IConfig {
      */
     public int getProcessingSize() {
         return processingSize;
+    }
+
+    /* ------------------------------ Classes ------------------------------ */
+
+    /**
+     * Responsible for directly processing packets from {@link Player}s that contribute to information shared across
+     * this entire server.
+     */
+    private class ServerSessionAdapter extends SessionAdapter {
+        @Override
+        public void packetReceived(PacketReceivedEvent event) {
+            if (event.getPacket() instanceof ServerPlayerListEntryPacket) {
+                ServerPlayerListEntryPacket packet = event.getPacket();
+
+                for (PlayerListEntry entry : packet.getEntries()) {
+                    UUID uuid = entry.getProfile().getId();
+
+                    if (packet.getAction() == PlayerListEntryAction.ADD_PLAYER) {
+                        String skinURL = "";
+                        GameProfile.Property texturesRaw = entry.getProfile().getProperty("textures");
+                        if (texturesRaw != null) {
+                            try {
+                                JsonObject root = Globals.JSON.parse(
+                                        new String(Base64.getDecoder().decode(texturesRaw.getValue()), StandardCharsets.UTF_8)
+                                ).getAsJsonObject();
+                                JsonObject textures = root.get("textures").getAsJsonObject();
+                                JsonObject skin = textures.get("SKIN").getAsJsonObject();
+                                skinURL = skin.get("url").getAsString();
+
+                            } catch (Exception error) {
+                                logger.warning("Couldn't read textures data: " + error.getMessage());
+                                logger.throwing(getClass().getSimpleName(), "packetReceived", error);
+                            }
+                        }
+                        yesCom.playersHandler.getInfo(
+                                uuid, entry.getProfile().getName(), skinURL, entry.getPing(),
+                                PlayerInfo.GameMode.valueOf(entry.getGameMode().name()) // FIXME: This is a hack
+                        );
+
+                        handleConnect(uuid);
+
+                    } else if (packet.getAction() == PlayerListEntryAction.REMOVE_PLAYER) {
+                        handleDisconnect(uuid);
+
+                    } else if (packet.getAction() == PlayerListEntryAction.UPDATE_GAMEMODE) {
+                        synchronized (onlinePlayers) {
+                            // Gets sent before ADD_PLAYER on constantiam.net, is this normal behaviour?
+                            if (onlinePlayers.containsKey(uuid)) {
+                                PlayerInfo info = yesCom.playersHandler.getInfo(uuid);
+                                PlayerInfo.GameMode gameMode = PlayerInfo.GameMode.valueOf(entry.getGameMode().name()); // FIXME: This is a hack
+
+                                if (info.gameMode != gameMode) {
+                                    info.gameMode = gameMode; // FIXME: Doesn't have support for multiple servers
+                                    Emitters.ON_ANY_PLAYER_GAMEMODE_UPDATE.emit(new Emitters.OnlinePlayerInfo(info, Server.this));
+                                }
+                            }
+                        }
+
+                    } else if (packet.getAction() == PlayerListEntryAction.UPDATE_LATENCY) {
+                        synchronized (onlinePlayers) {
+                            if (onlinePlayers.containsKey(uuid)) {
+                                PlayerInfo info = yesCom.playersHandler.getInfo(uuid);
+
+                                if (info.ping != entry.getPing()) {
+                                    info.ping = entry.getPing();
+                                    Emitters.ON_ANY_PLAYER_PING_UPDATE.emit(new Emitters.OnlinePlayerInfo(info, Server.this));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

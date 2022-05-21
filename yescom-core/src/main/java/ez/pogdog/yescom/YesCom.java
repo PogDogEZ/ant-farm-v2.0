@@ -1,17 +1,16 @@
 package ez.pogdog.yescom;
 
 import ez.pogdog.yescom.api.Logging;
-import ez.pogdog.yescom.api.data.ChunkPosition;
-import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.Emitters;
+import ez.pogdog.yescom.core.ITickable;
 import ez.pogdog.yescom.core.account.AccountHandler;
 import ez.pogdog.yescom.core.config.ConfigHandler;
 import ez.pogdog.yescom.core.config.IConfig;
-import ez.pogdog.yescom.core.connection.PlayersHandler;
+import ez.pogdog.yescom.core.data.PlayersHandler;
 import ez.pogdog.yescom.core.connection.Server;
 import ez.pogdog.yescom.core.data.DataHandler;
-import ez.pogdog.yescom.core.query.IsLoadedQuery;
-import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveQuery;
+import ez.pogdog.yescom.core.threads.FastAsyncUpdater;
+import ez.pogdog.yescom.core.threads.SlowAsyncUpdater;
 import ez.pogdog.yescom.core.util.Bootstrap;
 import jep.Interpreter;
 import jep.MainInterpreter;
@@ -25,6 +24,7 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -33,7 +33,22 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * YesCom(2) - an anarchy coordinate exploit.
+ * PogDog Software Suite Presents:
+ *
+ * Yescom(2)™ - sequel to YesCom (which is a "sequel" to NoCom).
+ *
+ * YesCom information found here: https://github.com/PogDogEZ/abrahack-rewrite
+ * NoCom information found here: https://github.com/nerdsinspace/nocom-explanation
+ *
+ * Project Credits:
+ * node3112 - worked on the client, server and viewer.
+ * NathanW - worked on the client, found the main part of the YesCom exploit.
+ * ARZI - worked on the client.
+ *
+ * Honorable mentions:
+ * Addison - provided original servers for hosting.
+ * ianmc05 - made a great tracker, which is partly skidded by me.
+ * hobrin - helped discover the YesCom exploit (and original NoCom exploit).
  */
 public class YesCom extends Thread implements IConfig {
 
@@ -149,6 +164,9 @@ public class YesCom extends Thread implements IConfig {
 
     private final Logger logger = Logging.getLogger("yescom.core");
 
+    public final FastAsyncUpdater fastAsyncUpdater;
+    public final SlowAsyncUpdater slowAsyncUpdater;
+    public final List<ITickable> tickables = new ArrayList<>();
     public final List<Server> servers = new ArrayList<>();
 
     public final AccountHandler accountHandler;
@@ -170,25 +188,36 @@ public class YesCom extends Thread implements IConfig {
 
         setName("yescom-main-thread");
 
+        fastAsyncUpdater = new FastAsyncUpdater();
+        slowAsyncUpdater = new SlowAsyncUpdater();
+
         logger.fine("Locating jar...");
         jarPath = Bootstrap.findJar();
         logger.fine(String.format("Found jar at %s.", jarPath));
 
         // servers.add(new Server("constantiam.net", 25565)); // :p
-        configHandler = new ConfigHandler(configDirectory);
+        configHandler = new ConfigHandler(configDirectory);  // This stuff should be initialised first
+        dataHandler = new DataHandler(dataDirectory);
 
         accountHandler = new AccountHandler(accountsFile);
         playersHandler = new PlayersHandler();
 
-        dataHandler = new DataHandler(dataDirectory);
-
         configHandler.addConfiguration(this);
         configHandler.addConfiguration(playersHandler);
+
+        try {
+            dataHandler.loadDatabase();
+        } catch (IOException error) {
+            logger.warning("Couldn't read local database.");
+            logger.throwing(getClass().getSimpleName(), "<init>", error);
+        }
     }
 
     @Override
     public void run() {
         running = true;
+        fastAsyncUpdater.start();
+        slowAsyncUpdater.start();
 
         python = new SharedInterpreter();
         python.exec("from sys import path"); // Bruh
@@ -197,13 +226,13 @@ public class YesCom extends Thread implements IConfig {
         for (Server server : servers) server.tick(); // Tick initial servers, auth accounts
 
         initialised = true;
-        logger.fine("YesCom initialised, let the chaos begin.");
+        logger.fine("YesCom initialised."); // , let the chaos begin.");
 
         while (running) {
             long start = System.currentTimeMillis();
 
             Emitters.ON_PRE_TICK.emit();
-            for (Server server : servers) server.tick();
+            for (ITickable tickable : tickables) tickable.tick();
             Emitters.ON_POST_TICK.emit();
 
             long elapsed = System.currentTimeMillis() - start;
@@ -213,7 +242,7 @@ public class YesCom extends Thread implements IConfig {
                 } catch (InterruptedException ignored) {
                 }
             } else if (elapsed > 50) {
-                logger.warning(String.format("Tick took %dms!", elapsed));
+                logger.warning(String.format("Main tick took %dms!", elapsed));
             }
         }
     }

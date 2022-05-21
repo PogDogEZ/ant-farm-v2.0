@@ -1,4 +1,4 @@
-package ez.pogdog.yescom.core.util;
+package ez.pogdog.yescom.core.data;
 
 import ez.pogdog.yescom.api.data.PlayerInfo;
 
@@ -10,6 +10,9 @@ import java.math.BigInteger;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -106,11 +109,56 @@ public final class Serial {
 
         /* ------------------------------ YesCom data ------------------------------ */
 
+        /**
+         * Reads a {@link PlayerInfo} object partially.
+         * @param inputStream The input stream to read from.
+         * @return A {@link PlayerInfo} without the {@link PlayerInfo#sessions}.
+         */
         public static PlayerInfo readPlayerInfo(InputStream inputStream) throws IOException {
-            PlayerInfo info = new PlayerInfo(readUUID(inputStream));
+            UUID uuid = readUUID(inputStream);
+            long firstSeen = readLong(inputStream);
+            PlayerInfo info = new PlayerInfo(uuid, firstSeen);
             info.username = readString(inputStream);
             info.skinURL = readString(inputStream);
-            return info; // TODO: Sessions, etc
+            return info;
+        }
+
+        /**
+         * Reads the session into a {@link PlayerInfo} object.
+         * @param inputStream The input stream to read from.
+         * @param infos Infos whose data to overwrite if they are in this data.
+         * @return A stub {@link PlayerInfo} with the only usable data being the {@link PlayerInfo#uuid},
+         *         {@link PlayerInfo#servers} and {@link PlayerInfo#sessions}, the rest is uninitialised.
+         */
+        public static PlayerInfo readSessions(InputStream inputStream, Map<UUID, PlayerInfo> infos) throws IOException {
+            UUID uuid = readUUID(inputStream);
+            long firstSeen = readLong(inputStream);
+
+            PlayerInfo info = infos.get(uuid);
+            if (info == null || !info.uuid.equals(uuid)) {
+                info = new PlayerInfo(uuid, firstSeen);
+            } else {
+                info.servers.clear();
+                info.sessions.clear();
+            }
+
+            int serversCount = readInteger(inputStream);
+            for (int index = 0; index < serversCount; ++index) {
+                String hostname = Serial.Read.readString(inputStream);
+                int port = Serial.Read.readInteger(inputStream);
+                info.servers.add(new PlayerInfo.Server(hostname, port));
+            }
+
+            int sessionsCount = readInteger(inputStream);
+            for (int index = 0; index < sessionsCount; ++index) {
+                int serverIndex = readInteger(inputStream);
+                long start = readLong(inputStream);
+                long delta = readLong(inputStream);
+                info.sessions.add(new PlayerInfo.Session(info.servers.get(serverIndex), firstSeen + start,
+                        firstSeen + start + delta));
+            }
+
+            return info;
         }
     }
 
@@ -179,10 +227,39 @@ public final class Serial {
 
         /* ------------------------------ YesCom data ------------------------------ */
 
+        /**
+         * Partially writes a {@link PlayerInfo} without the session data.
+         * @param info The info to write.
+         * @param outputStream The output stream to write it to.
+         */
         public static void writePlayerInfo(PlayerInfo info, OutputStream outputStream) throws IOException {
             writeUUID(info.uuid, outputStream);
+            writeLong(info.firstSeen, outputStream);
             writeString(info.username, outputStream);
             writeString(info.skinURL, outputStream);
+        }
+
+        /**
+         * Writes sessions data from an {@link PlayerInfo} object.
+         * @param info The info to write.
+         * @param outputStream The output stream to write it to.
+         */
+        public static void writeSessions(PlayerInfo info, OutputStream outputStream) throws IOException {
+            writeUUID(info.uuid, outputStream);
+            writeLong(info.firstSeen, outputStream);
+
+            writeInteger(info.servers.size(), outputStream);
+            for (PlayerInfo.Server server : info.servers) {
+                writeString(server.hostname, outputStream);
+                writeInteger(server.port, outputStream);
+            }
+
+            writeInteger(info.sessions.size(), outputStream);
+            for (PlayerInfo.Session session : info.sessions) {
+                writeInteger(info.servers.indexOf(session.server), outputStream);
+                writeLong(session.start - info.firstSeen, outputStream);
+                writeLong(session.end - session.start, outputStream);
+            }
         }
     }
 }

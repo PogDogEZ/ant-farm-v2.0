@@ -1,11 +1,9 @@
 package ez.pogdog.yescom.core.connection;
 
-import com.github.steveice10.mc.auth.data.GameProfile;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.auth.service.AuthenticationService;
 import com.github.steveice10.mc.protocol.MinecraftProtocol;
 import com.github.steveice10.mc.protocol.data.game.PlayerListEntry;
-import com.github.steveice10.mc.protocol.data.game.PlayerListEntryAction;
 import com.github.steveice10.mc.protocol.packet.ingame.client.ClientChatPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionRotationPacket;
@@ -36,15 +34,14 @@ import com.github.steveice10.packetlib.event.session.SessionAdapter;
 import com.github.steveice10.packetlib.packet.Packet;
 import com.github.steveice10.packetlib.tcp.TcpClientSession;
 import com.github.steveice10.packetlib.tcp.TcpSessionFactory;
-import com.google.gson.JsonObject;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.Angle;
 import ez.pogdog.yescom.api.data.ChunkPosition;
 import ez.pogdog.yescom.api.data.Dimension;
-import ez.pogdog.yescom.api.data.PlayerInfo;
 import ez.pogdog.yescom.api.data.Position;
 import ez.pogdog.yescom.core.Emitters;
+import ez.pogdog.yescom.core.ITickable;
 import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
@@ -53,11 +50,8 @@ import ez.pogdog.yescom.core.report.player.DeadReport;
 import ez.pogdog.yescom.core.report.player.HealthLogoutReport;
 import ez.pogdog.yescom.core.report.player.VisualRangeLogoutReport;
 import ez.pogdog.yescom.core.util.Chat;
-import ez.pogdog.yescom.api.Globals;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -65,14 +59,14 @@ import java.util.logging.Logger;
 /**
  * A player that is connected to a {@link Server}.
  */
-public class Player implements IConfig {
+public class Player implements IConfig, ITickable {
 
     private final Logger logger = Logging.getLogger("yescom.core.connection");
     private final YesCom yesCom = YesCom.getInstance();
 
     /* ------------------------------ Options ------------------------------ */
 
-    public final Option<Boolean> AUTO_RECONNECT = new Option<>(
+    public final Option<Boolean> AUTO_RECONNECT = new Option<>( // TODO: Option to disable on failed connection attempts
             "Auto reconnect",
             "Automatically reconnects this player to the server.",
             true
@@ -190,6 +184,7 @@ public class Player implements IConfig {
     /**
      * Ticks this player.
      */
+    @Override
     public void tick() {
         if (isConnected()) {
             // Update position
@@ -218,7 +213,7 @@ public class Player implements IConfig {
         } else {
             boolean autoReconnectReady = System.currentTimeMillis() - lastLoginTime > server.AUTO_RECONNECT_TIME.value;
             boolean autoLogoutReady = System.currentTimeMillis() - lastAutoLogoutTime >= this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
-            if (AUTO_RECONNECT.value && server.canLogin() && !server.onlinePlayers.contains(getUUID()) &&
+            if (AUTO_RECONNECT.value && server.canLogin() && !server.isOnline(getUUID()) &&
                     autoReconnectReady && autoLogoutReady)
                 connect();
         }
@@ -230,7 +225,7 @@ public class Player implements IConfig {
      * Connects this player to the server, if they are not connected already.
      */
     public void connect() {
-        if (!isConnected()) {
+        if (!isConnected() && server.hasPlayer(this)) {
             lastLoginTime = System.currentTimeMillis();
 
             try {
@@ -262,7 +257,8 @@ public class Player implements IConfig {
                 Client client = new Client(server.hostname, server.port, protocol, new TcpSessionFactory(null));
 
                 session = new TcpClientSession(server.hostname, server.port, protocol, client, null);
-                session.addListener(new SessionReactionAdapter());
+                session.addListener(server.adapter);
+                session.addListener(new PlayerSessionAdapter());
                 session.connect();
 
                 server.resetLoginTime();
@@ -434,7 +430,7 @@ public class Player implements IConfig {
 
     /* ------------------------------ Classes ------------------------------ */
 
-    private class SessionReactionAdapter extends SessionAdapter {
+    private class PlayerSessionAdapter extends SessionAdapter {
         @Override
         public void packetReceived(PacketReceivedEvent event) {
             Emitters.ON_PLAYER_PACKET_IN.emit(new Emitters.PlayerPacket(Player.this, event.getPacket()));
@@ -507,73 +503,6 @@ public class Player implements IConfig {
 
                 for (PlayerListEntry entry : packet.getEntries()) {
                     UUID uuid = entry.getProfile().getId();
-
-                    if (packet.getAction() == PlayerListEntryAction.ADD_PLAYER) {
-                        // yesCom.playersHandler.setName(uuid, entry.getProfile().getName());
-
-                        synchronized (server.onlinePlayers) {
-                            boolean joined = !server.onlinePlayers.contains(uuid);
-                            server.onlinePlayers.add(uuid);
-                            PlayerInfo info = yesCom.playersHandler.playerCache.computeIfAbsent(uuid, PlayerInfo::new);
-                            info.username = entry.getProfile().getName();
-                            if (info.skinURL.isBlank()) {
-                                GameProfile.Property texturesRaw = entry.getProfile().getProperty("textures");
-                                if (texturesRaw != null) {
-                                    try {
-                                        JsonObject root = Globals.JSON.parse(
-                                                new String(Base64.getDecoder().decode(texturesRaw.getValue()), StandardCharsets.UTF_8)
-                                        ).getAsJsonObject();
-                                        JsonObject textures = root.get("textures").getAsJsonObject();
-                                        JsonObject skin = textures.get("SKIN").getAsJsonObject();
-                                        info.skinURL = skin.get("url").getAsString();
-
-                                    } catch (Exception error) {
-                                        logger.warning("Couldn't read textures data: " + error.getMessage());
-                                        logger.throwing(getClass().getSimpleName(), "packetReceived", error);
-                                    }
-                                }
-                            }
-                            info.gameMode = PlayerInfo.GameMode.valueOf(entry.getGameMode().name()); // FIXME: This is a hack
-                            info.ping = entry.getPing();
-
-                            if (joined) Emitters.ON_PLAYER_JOIN.emit(new Emitters.OnlinePlayerInfo(info, server));
-                        }
-
-                    } else if (packet.getAction() == PlayerListEntryAction.REMOVE_PLAYER) {
-                        synchronized (server.onlinePlayers) {
-                            if (server.onlinePlayers.contains(uuid)) {
-                                PlayerInfo info = yesCom.playersHandler.playerCache.get(uuid);
-                                server.onlinePlayers.remove(uuid);
-                                Emitters.ON_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(info, server));
-                            }
-                        }
-
-                    } else if (packet.getAction() == PlayerListEntryAction.UPDATE_GAMEMODE) {
-                        synchronized (server.onlinePlayers) {
-                            // Gets sent before ADD_PLAYER on constantiam.net, is this normal behaviour?
-                            if (server.onlinePlayers.contains(uuid)) {
-                                PlayerInfo info = yesCom.playersHandler.playerCache.get(uuid);
-                                PlayerInfo.GameMode gameMode = PlayerInfo.GameMode.valueOf(entry.getGameMode().name()); // FIXME: This is a hack
-
-                                if (info.gameMode != gameMode) {
-                                    info.gameMode = gameMode; // FIXME: Doesn't have support for multiple servers
-                                    Emitters.ON_PLAYER_GAMEMODE_UPDATE.emit(new Emitters.OnlinePlayerInfo(info, server));
-                                }
-                            }
-                        }
-
-                    } else if (packet.getAction() == PlayerListEntryAction.UPDATE_LATENCY) {
-                        synchronized (server.onlinePlayers) {
-                            if (server.onlinePlayers.contains(uuid)) {
-                                PlayerInfo info = yesCom.playersHandler.playerCache.get(uuid);
-
-                                if (info.ping != entry.getPing()) {
-                                    info.ping = entry.getPing();
-                                    Emitters.ON_ANY_PLAYER_PING_UPDATE.emit(new Emitters.OnlinePlayerInfo(info, server));
-                                }
-                            }
-                        }
-                    }
 
                     if (uuid.equals(getUUID())) {
                         serverPing = entry.getPing();
