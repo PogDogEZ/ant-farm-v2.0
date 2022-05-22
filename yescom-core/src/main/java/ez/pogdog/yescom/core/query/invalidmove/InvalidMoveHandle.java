@@ -19,6 +19,9 @@ import com.github.steveice10.mc.protocol.packet.ingame.server.window.ServerWindo
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerBlockChangePacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerChunkDataPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.world.ServerMultiBlockChangePacket;
+import com.github.steveice10.opennbt.tag.builtin.CompoundTag;
+import com.github.steveice10.opennbt.tag.builtin.StringTag;
+import com.github.steveice10.opennbt.tag.builtin.Tag;
 import com.github.steveice10.packetlib.packet.Packet;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
@@ -58,13 +61,40 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
     /**
      * Valid storages / containers that can be used. There are more, I can't be bothered to add them :p.
-     * 23 - dispenser.
-     * 54 - chest.
-     * 130 - ender chest.
-     * 154 - hopper.
-     * 158 - dropper.
      */
-    public final List<Integer> VALID_STORAGES = Arrays.asList(23, 54, 130, 154, 158); // TODO: Make this an option I guess
+    public final List<String> VALID_STORAGES = Arrays.asList(  // TODO: Make this an option I guess
+            "minecraft:chest",
+            "minecraft:trapped_chest",
+            "minecraft:furnace",
+            "minecraft:lit_furnace",
+            "minecraft:anvil",
+            "minecraft:ender_chest",
+            "minecraft:dispenser",
+            "minecraft:dropper",
+            "minecraft:hopper",
+            "minecraft:command_block", // I mean, am I wrong?
+            "minecraft:repeating_command_block",
+            "minecraft:chain_command_block",
+            "minecraft:enchanting_table",
+            "minecraft:brewing_stand",
+            "minecraft:beacon",
+            "minecraft:white_shulker_box",
+            "minecraft:orange_shulker_box",
+            "minecraft:magenta_shulker_box",
+            "minecraft:light_blue_shulker_box",
+            "minecraft:yellow_shulker_box",
+            "minecraft:lime_shulker_box",
+            "minecraft:pink_shulker_box",
+            "minecraft:gray_shulker_box",
+            "minecraft:silver_shulker_box",
+            "minecraft:cyan_shulker_box",
+            "minecraft:purple_shulker_box",
+            "minecraft:blue_shulker_box",
+            "minecraft:brown_shulker_box",
+            "minecraft:green_shulker_box",
+            "minecraft:red_shulker_box",
+            "minecraft:black_shulker_box"
+    );
 
     /* ------------------------------ Options ------------------------------ */
 
@@ -394,6 +424,34 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                 ServerChunkDataPacket chunkData = (ServerChunkDataPacket)packet;
 
                 synchronized (confirmedStorages) {
+                    Set<BlockPosition> inChunk = new HashSet<>();
+                    // FIXME: Works with non-full chunks?
+                    for (BlockPosition storage : confirmedStorages) {
+                        if (storage.getX() >> 4 == chunkData.getX() && storage.getZ() >> 4 == chunkData.getZ()) inChunk.add(storage);
+                    }
+                    confirmedStorages.removeAll(inChunk);
+
+                    for (CompoundTag tileEntity : chunkData.getTileEntities()) {
+                        Map<String, Tag> values = tileEntity.getValue();
+                        if (VALID_STORAGES.contains((String)values.getOrDefault("id", new StringTag("secret:message:WTF!!")).getValue())) {
+                            if (values.containsKey("x") && values.containsKey("y") && values.containsKey("z")) {
+                                BlockPosition blockPosition = new BlockPosition(
+                                        (int)values.get("x").getValue(),
+                                        (int)values.get("y").getValue(),
+                                        (int)values.get("z").getValue()
+                                );
+                                confirmedStorages.add(blockPosition);
+                            }
+                        }
+                    }
+
+                    // Has it been replaced by another block?
+                    if (bestStorage != null && bestStorage.getX() >> 4 == chunkData.getX() &&
+                            bestStorage.getZ() >> 4 == chunkData.getZ() && !confirmedStorages.contains(bestStorage))
+                        bestStorage = null;
+
+                    // TODO: Fallback to checking for stuff like crafting tables?
+                    /*
                     for (int index = 0; index < chunkData.getColumn().getChunks().length; ++index) {
                         Chunk chunk = chunkData.getColumn().getChunks()[index];
                         if (chunk == null || chunk.isEmpty()) continue;
@@ -417,6 +475,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                             }
                         }
                     }
+                     */
                 }
 
             } else if (packet instanceof ServerBlockChangePacket) {

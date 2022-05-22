@@ -562,7 +562,7 @@ public class Player implements IConfig, ITickable {
 
             } else if (event.getPacket() instanceof ServerChunkDataPacket) {
                 ServerChunkDataPacket packet = event.getPacket();
-                loadedChunks.add(new ChunkPosition(packet.getColumn().getX(), packet.getColumn().getZ()));
+                loadedChunks.add(new ChunkPosition(packet.getX(), packet.getZ()));
                 lastChunkPacket = System.currentTimeMillis(); // FIXME: Moving across chunks, big updates, etc
 
                 Emitters.ON_PLAYER_SERVER_STATS_UPDATE.emit(Player.this);

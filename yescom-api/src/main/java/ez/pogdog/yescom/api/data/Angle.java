@@ -5,7 +5,7 @@ import java.util.Objects;
 /**
  * Immutable angle type.
  */
-public class Angle implements Cloneable {
+public final class Angle implements Cloneable {
 
     public float yaw;
     public float pitch;

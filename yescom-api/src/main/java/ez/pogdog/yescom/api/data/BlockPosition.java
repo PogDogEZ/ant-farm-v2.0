@@ -4,7 +4,7 @@ package ez.pogdog.yescom.api.data;
 
 import java.util.Objects;
 
-public class BlockPosition {
+public final class BlockPosition {
 
     private final int x;
     private final int y;
