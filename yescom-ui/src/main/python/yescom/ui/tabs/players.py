@@ -61,6 +61,8 @@ class PlayersTab(QWidget):
         return "<PlayersTab() at %x>" % id(self)
 
     def _setup_tab(self) -> None:
+        logger.finer("Setting up players tab...")
+
         main_layout = QHBoxLayout(self)
 
         accounts_layout = QVBoxLayout()
@@ -451,41 +453,50 @@ class PlayersTab(QWidget):
             self.main_window.skin_downloader_thread.skin_resolved.connect(self._on_skin_resolved)
             self.main_window.skin_downloader_thread.request_skin(uuid)
 
-            for index in range(11):
-                self.addChild(QTreeWidgetItem(self, []))
+            uuid_child = QTreeWidgetItem(self, ["UUID:", str(uuid)])
+            uuid_child.setToolTip(0, "The player's UUID.")
+            uuid_child.setToolTip(1, str(uuid))
+            self.addChild(uuid_child)
 
-            self.child(0).setText(0, "UUID:")
-            self.child(0).setText(1, str(uuid))
-            self.child(0).setToolTip(0, "The player's UUID.")
-            self.child(0).setToolTip(1, self.child(0).text(1))
+            self.connected_child = QTreeWidgetItem(self, ["Connected:"])
+            self.connected_child.setToolTip(0, "Is the player connected to the server?")
+            self.addChild(self.connected_child)
 
-            self.child(1).setText(0, "Connected:")
-            self.child(1).setToolTip(0, "Is the player connected to the server?")
-            self._on_login(player)
-
-            self.child(2).setText(0, "Position:")
-            self.child(2).setToolTip(0, "The current position of the player.")
-            self.child(3).setText(0, "Angle:")
-            self.child(3).setToolTip(0, "The current angle (yaw, pitch) of the player.")
-            self.child(4).setText(0, "Dimension:")
-            self.child(4).setToolTip(0, "The dimension the player is currently in.")
+            self.position_child = QTreeWidgetItem(self, ["Position:"])
+            self.position_child.setToolTip(0, "The current position of the player.")
+            self.addChild(self.position_child)
+            self.angle_child = QTreeWidgetItem(self, ["Angle:"])
+            self.angle_child.setToolTip(0, "The current angle (yaw, pitch) of the player.")
+            self.addChild(self.angle_child)
+            self.dimension_child = QTreeWidgetItem(self, ["Dimension:"])
+            self.dimension_child.setToolTip(0, "The dimension the player is currently in.")
+            self.addChild(self.dimension_child)
             self._on_position_update(player)
 
-            self.child(5).setText(0, "Health:")
-            self.child(5).setToolTip(0, "The current health of the player.")
-            self.child(6).setText(0, "Hunger:")
-            self.child(6).setToolTip(0, "The current hunger level of the player.")
-            self.child(7).setText(0, "Saturation:")
-            self.child(7).setToolTip(0, "The current saturation level of the player.")
+            self.health_child = QTreeWidgetItem(self, ["Health:"])
+            self.health_child.setToolTip(0, "The current health of the player.")
+            self.addChild(self.health_child)
+            self.hunger_child = QTreeWidgetItem(self, ["Hunger:"])
+            self.hunger_child.setToolTip(0, "The current hunger level of the player.")
+            self.addChild(self.hunger_child)
+            self.saturation_child = QTreeWidgetItem(self, ["Saturation:"])
+            self.saturation_child.setToolTip(0, "The current saturation level of the player.")
+            self.addChild(self.saturation_child)
             self._on_health_update(player)
 
-            self.child(8).setText(0, "Server tickrate:")
-            self.child(8).setToolTip(0, "The current TPS that this player estimates the server is running at.")
-            self.child(9).setText(0, "Server ping:")
-            self.child(9).setToolTip(0, "The ping that the server estimates this player has.")
-            self.child(10).setText(0, "Chunks:")
-            self.child(10).setToolTip(0, "The number of chunks in the render distance of this player.")
+            self.tickrate_child = QTreeWidgetItem(self, ["Server tickrate:"])
+            self.tickrate_child.setToolTip(0, "The current TPS that this player estimates the server is running at.")
+            self.addChild(self.tickrate_child)
+            self.ping_child = QTreeWidgetItem(self, ["Server ping:"])
+            self.ping_child.setToolTip(0, "The ping that the server estimates this player has.")
+            self.addChild(self.ping_child)
+            self.chunks_child = QTreeWidgetItem(self, ["Chunks:"])
+            self.chunks_child.setToolTip(0, "The number of chunks in the render distance of this player.")
+            self.addChild(self.chunks_child)
             self._on_server_stats_update(player)
+
+            self._on_login(player)
+            self._on_server_change()  # Update hidden
 
             # TODO: Last position if logged out
             # TODO: Failed connection attempts
@@ -523,18 +534,20 @@ class PlayersTab(QWidget):
                     self.setToolTip(0, self.disconnected_tooltip % False)
                     self.setForeground(0, QColor(200, 0, 0))
 
-                self.child(1).setText(1, str(connected))
-                self.child(1).setToolTip(1, self.child(1).text(1))
+                self.connected_child.setText(1, str(connected))
+                self.connected_child.setToolTip(1, self.child(1).text(1))
 
-                self.child(2).setHidden(not connected)
-                self.child(3).setHidden(not connected)
-                self.child(4).setHidden(not connected)
-                self.child(5).setHidden(not connected)
-                self.child(6).setHidden(not connected)
-                self.child(7).setHidden(not connected)
-                self.child(8).setHidden(not connected)
-                self.child(9).setHidden(not connected)
-                self.child(10).setHidden(not connected)
+                self.position_child.setHidden(not connected)
+                self.angle_child.setHidden(not connected)
+                self.dimension_child.setHidden(not connected)
+
+                self.health_child.setHidden(not connected)
+                self.hunger_child.setHidden(not connected)
+                self.saturation_child.setHidden(not connected)
+
+                self.tickrate_child.setHidden(not connected)
+                self.ping_child.setHidden(not connected)
+                self.chunks_child.setHidden(not connected)
 
         def _on_logout(self, player_logout: Emitters.PlayerLogout) -> None:
             self._on_login(player_logout.player)
@@ -544,12 +557,12 @@ class PlayersTab(QWidget):
                 position = player.getPosition()
                 angle = player.getAngle()
 
-                self.child(2).setText(1, "%.1f, %.1f, %.1f" % (position.getX(), position.getY(), position.getZ()))
-                self.child(2).setToolTip(1, self.child(2).text(1))
-                self.child(3).setText(1, "%.1f, %.1f" % (angle.getYaw(), angle.getPitch()))
-                self.child(3).setToolTip(1, self.child(3).text(1))
-                self.child(4).setText(1, str(player.getDimension()).lower())
-                self.child(4).setToolTip(1, self.child(4).text(1))
+                self.position_child.setText(1, "%.1f, %.1f, %.1f" % (position.getX(), position.getY(), position.getZ()))
+                self.position_child.setToolTip(1, self.position_child.text(1))
+                self.angle_child.setText(1, "%.1f, %.1f" % (angle.getYaw(), angle.getPitch()))
+                self.angle_child.setToolTip(1, self.angle_child.text(1))
+                self.dimension_child.setText(1, str(player.getDimension()).lower())
+                self.dimension_child.setToolTip(1, str(player.getDimension()).lower())
 
         def _on_health_update(self, player: Player) -> None:
             if player == self.player:
@@ -557,12 +570,12 @@ class PlayersTab(QWidget):
                     player.isConnected(), player.getServerTPS(), player.getServerPing(), player.getHealth(),
                 ))
 
-                self.child(5).setText(1, "%.1f" % player.getHealth())
-                self.child(5).setToolTip(1, self.child(5).text(1))
-                self.child(6).setText(1, "%i" % player.getHunger())
-                self.child(6).setToolTip(1, self.child(6).text(1))
-                self.child(7).setText(1, "%.1f" % player.getSaturation())
-                self.child(7).setToolTip(1, self.child(7).text(1))
+                self.health_child.setText(1, "%.1f" % player.getHealth())
+                self.health_child.setToolTip(1, self.health_child.text(1))
+                self.hunger_child.setText(1, "%i" % player.getHunger())
+                self.hunger_child.setToolTip(1, self.hunger_child.text(1))
+                self.saturation_child.setText(1, "%.1f" % player.getSaturation())
+                self.saturation_child.setToolTip(1, self.saturation_child.text(1))
 
         def _on_server_stats_update(self, player: Player) -> None:
             if player == self.player:
@@ -570,12 +583,12 @@ class PlayersTab(QWidget):
                     player.isConnected(), player.getServerTPS(), player.getServerPing(), player.getHealth(),
                 ))
 
-                self.child(8).setText(1, "%.1ftps" % player.getServerTPS())
-                self.child(8).setToolTip(1, self.child(8).text(1))
-                self.child(9).setText(1, "%ims" % player.getServerPing())
-                self.child(9).setToolTip(1, self.child(9).text(1))
-                self.child(10).setText(1, "%i" %  len(player.loadedChunks))
-                self.child(10).setToolTip(1, self.child(10).text(1))
+                self.tickrate_child.setText(1, "%.1ftps" % player.getServerTPS())
+                self.tickrate_child.setToolTip(1, self.tickrate_child.text(1))
+                self.ping_child.setText(1, "%ims" % player.getServerPing())
+                self.ping_child.setToolTip(1, self.ping_child.text(1))
+                self.chunks_child.setText(1, "%i" % len(player.loadedChunks))
+                self.chunks_child.setToolTip(1, self.chunks_child.text(1))
 
     class PlayersTree(QTreeWidget):  # TODO: Search by username
         """
@@ -585,7 +598,6 @@ class PlayersTab(QWidget):
         def __init__(self, parent: "PlayersTab") -> None:
             """
             :param parent: The parent widget.
-            :param automatic_skins: Automatically download player skins?
             """
 
             super().__init__(parent)
@@ -627,9 +639,7 @@ class PlayersTab(QWidget):
             menu.addSeparator()
 
             menu.addAction("Open NameMC...", lambda: webbrowser.open("https://namemc.com/profile/%s" % info.uuid))
-
             menu.addSeparator()
-
             menu.addAction(
                 "Copy username",
                 lambda: clipboard.setText(self.yescom.playersHandler.getName(info.uuid, "<unknown name>")),
@@ -687,24 +697,24 @@ class PlayersTab(QWidget):
             #     uuid, lambda icon: self.setIcon(0, icon), parent.automatic_skins,
             # )
 
-            for index in range(3):  # TODO: Inline
-                self.addChild(QTreeWidgetItem(self, []))
-
-            self.child(0).setText(0, "UUID:")
-            self.child(0).setText(1, str(uuid))
-            self.child(0).setToolTip(0, "The UUID of the player.")
-            self.child(0).setToolTip(1, self.child(0).text(1))
+            uuid_child = QTreeWidgetItem(self, ["UUID", str(uuid)])
+            uuid_child.setToolTip(0, "The UUID of the player.")
+            uuid_child.setToolTip(1, str(uuid))
+            self.addChild(uuid_child)
 
             # TODO: Sessions, are we tracking them, etc...
 
-            self.child(1).setText(0, "Trusted:")
-            self.child(1).setToolTip(0, "Is this a player that we trust?")
+            trusted_child = QTreeWidgetItem(self, ["Trusted:"])
+            trusted_child.setToolTip(0, "Is this a player that we trust?")
+            self.addChild(trusted_child)
             self._on_trust_state_changed(info)
 
-            self.child(2).setText(0, "First seen:")
-            self.child(2).setToolTip(0, "The first time that YesCom saw the player (across all servers).")
-            self.child(2).setText(1, str(datetime.datetime.fromtimestamp(info.firstSeen // 1000)))
-            self.child(2).setToolTip(1, self.child(2).text(1))
+            first_seen_child = QTreeWidgetItem(
+                self, ["First seen:", str(datetime.datetime.fromtimestamp(info.firstSeen // 1000))],
+            )
+            first_seen_child.setToolTip(0, "The first time that YesCom saw the player (across all servers).")
+            first_seen_child.setToolTip(1, first_seen_child.text(1))
+            self.addChild(first_seen_child)
 
             self.main_window.trust_state_changed.connect(self._on_trust_state_changed)
 

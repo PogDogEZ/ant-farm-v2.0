@@ -83,7 +83,6 @@ class SkinDownloaderThread(QThread):
                     logger.fine("Can't download skin for %s as they have not been cached yet." % uuid)
 
                 else:
-                    del self._requests[uuid]
                     player_info = player_cache[uuid]
 
                     if player_info.skinURL:
@@ -103,6 +102,7 @@ class SkinDownloaderThread(QThread):
 
                                 self.skin_resolved.emit((uuid, QIcon(player_head)))
                                 del player_skin
+                                del self._requests[uuid]
 
                             else:
                                 raise Exception("Status code %i." % request.status_code)

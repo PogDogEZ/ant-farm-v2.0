@@ -6,6 +6,7 @@ import time
 import webbrowser
 from typing import Any, Tuple
 
+from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
@@ -48,42 +49,51 @@ class OverviewTab(QWidget):
         return "<OverviewTab() at %x>" % id(self)
 
     def _setup_tab(self) -> None:
+        logger.finer("Setting up overview tab...")
+
         main_layout = QHBoxLayout(self)
 
         info_layout = QVBoxLayout()
 
         self.address_label = QLabel(self)
         self.address_label.setText("Address: (no server)")
+        self.address_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         info_layout.addWidget(self.address_label)
 
         self.tickrate_label = QLabel(self)
         self.tickrate_label.setText("Tickrate: 0.0tps")
         self.tickrate_label.setToolTip("The current server tickrate.")
+        # self.tickrate_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         info_layout.addWidget(self.tickrate_label)
 
         self.ping_label = QLabel(self)
         self.ping_label.setText("Ping: 0ms")
         self.ping_label.setToolTip("The average ping across all connected accounts.")
+        # self.ping_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         info_layout.addWidget(self.ping_label)
 
         self.tslp_label = QLabel(self)
         self.tslp_label.setText("TSLP: 0ms")
         self.tslp_label.setToolTip("The minimum time since last packet across all connected accounts.")
+        # self.tslp_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         info_layout.addWidget(self.tslp_label)
 
         self.uptime_label = QLabel(self)
         self.uptime_label.setText("Uptime: 00:00:00")
         self.uptime_label.setToolTip("How long we've been connected to this server for.")
+        # self.uptime_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         info_layout.addWidget(self.uptime_label)
 
         self.render_dist_label = QLabel(self)
         self.render_dist_label.setText("Render distance: 0 / 0 (0 chunks)")
         self.render_dist_label.setToolTip("Estimated server render distance.")
+        self.render_dist_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         info_layout.addWidget(self.render_dist_label)
 
         self.queryrate_label = QLabel(self)
         self.queryrate_label.setText("Queryrate: 0.0qps")
         self.queryrate_label.setToolTip("The current rate of queries being sent to the server.")
+        # self.queryrate_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         info_layout.addWidget(self.queryrate_label)
 
         info_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
@@ -137,7 +147,7 @@ class OverviewTab(QWidget):
         tickrate = 0.0
         ping = 0.0
         tslp = "0"
-        uptime = "00:00:00"
+        uptime = "0:00:00"
         render_distance = 0
         queryrate = 0.0
 
@@ -248,11 +258,8 @@ class OverviewTab(QWidget):
             view_player.setEnabled(player is not None)
 
             menu.addSeparator()
-
             menu.addAction("Open NameMC...", lambda: webbrowser.open("https://namemc.com/profile/%s" % info.uuid))
-
             menu.addSeparator()
-
             menu.addAction(
                 "Copy username",
                 lambda: clipboard.setText(self.yescom.playersHandler.getName(info.uuid, "<unknown name>")),
@@ -317,40 +324,46 @@ class OverviewTab(QWidget):
             self.main_window.skin_downloader_thread.skin_resolved.connect(self._on_skin_resolved)
             self.main_window.skin_downloader_thread.request_skin(uuid)
 
-            for index in range(7):
-                self.addChild(QTreeWidgetItem(self, []))
+            uuid_child = QTreeWidgetItem(self, ["UUID:", str(uuid)])
+            uuid_child.setToolTip(0, "The UUID of the player.")
+            uuid_child.setToolTip(1, str(uuid))
+            self.addChild(uuid_child)
 
-            self.child(0).setText(0, "UUID:")
-            self.child(0).setText(1, str(uuid))
-            self.child(0).setToolTip(0, "The UUID of the player.")
-            self.child(0).setToolTip(1, self.child(0).text(1))
+            # Actually only need to set this once cos once they relog a new item will be created
+            known_child = QTreeWidgetItem(self, ["Known:", str(known)])
+            known_child.setToolTip(0, "Is this a player that we \"control\" / know?")
+            known_child.setToolTip(1, self.child(1).text(1))
+            self.addChild(known_child)
 
-            self.child(1).setText(0, "Known:")
-            self.child(1).setText(1, str(known))
-            self.child(1).setToolTip(0, "Is this a player that we \"control\" / know?")
-            self.child(1).setToolTip(1, self.child(1).text(1))
-
-            self.child(2).setText(0, "Trusted:")
-            self.child(2).setToolTip(0, "Is this a player that we trust?")
+            self.trusted_child = QTreeWidgetItem(self, ["Trusted:"])
+            self.trusted_child.setToolTip(0, "Is this a player that we trust?")
+            self.addChild(self.trusted_child)
             self._on_trust_state_changed(info)
 
-            self.child(3).setText(0, "Ping:")
-            self.child(3).setToolTip(0, "The latency that the server estimates this player has.")
+            self.ping_child = QTreeWidgetItem(self, ["Ping:"])
+            self.ping_child.setToolTip(0, "The latency that the server estimates this player has.")
+            self.addChild(self.ping_child)
             self._on_ping_update(Emitters.OnlinePlayerInfo(info, self.server))
 
-            self.child(4).setText(0, "Gamemode:")
-            self.child(4).setToolTip(0, "The gamemode of the player.")
+            self.gamemode_child = QTreeWidgetItem(self, ["Gamemode:"])
+            self.gamemode_child.setToolTip(0, "The gamemode of the player.")
+            self.addChild(self.gamemode_child)
             self._on_gamemode_update(Emitters.OnlinePlayerInfo(info, self.server))
 
-            self.child(5).setText(0, "First seen:")
-            self.child(5).setToolTip(0, "The first time that YesCom saw the player (across all servers).")
-            self.child(5).setText(1, str(datetime.datetime.fromtimestamp(info.firstSeen // 1000)))
-            self.child(5).setToolTip(1, self.child(5).text(1))
+            first_seen_child = QTreeWidgetItem(
+                self, ["First seen:", str(datetime.datetime.fromtimestamp(info.firstSeen // 1000))],
+            )
+            first_seen_child.setToolTip(0, "The first time that YesCom saw the player (across all servers).")
+            first_seen_child.setToolTip(1, self.child(5).text(1))
+            self.addChild(first_seen_child)
 
-            self.child(6).setText(0, "Online for:")
-            self.child(6).setToolTip(0, "How long the player has been online for.")
+            self.online_for_child = QTreeWidgetItem(self, ["Online for:"])
+            self.online_for_child.setToolTip(0, "How long the player has been online for.")
+            self.addChild(self.online_for_child)
 
-            # TODO: More information, are they being tracked, current session time, etc...
+            self._on_server_change()
+
+            # TODO: More information, are they being tracked, etc...
 
             self.main_window.tick.connect(self._on_tick)
             self.main_window.server_changed.connect(self._on_server_change)
@@ -371,10 +384,10 @@ class OverviewTab(QWidget):
         def _on_tick(self) -> None:
             current = self.main_window.current_server
             if self.isExpanded() and current is not None:  # No need to update if we're not expanded
-                self.child(6).setText(1, str(datetime.timedelta(
-                    seconds=current.getOnlineTime(self.info.uuid) // 1000,
+                self.online_for_child.setText(1, str(datetime.timedelta(
+                    seconds=current.getSessionPlayTime(self.info.uuid) // 1000,
                 )))
-                self.child(6).setToolTip(1, self.child(5).text(1))
+                self.online_for_child.setToolTip(1, self.child(5).text(1))
 
         def _on_trust_state_changed(self, info: PlayerInfo) -> None:
             if info == self.info:
@@ -384,8 +397,8 @@ class OverviewTab(QWidget):
                 else:
                     self.setForeground(0, QApplication.palette().text())
 
-                self.child(2).setText(1, str(trusted))
-                self.child(2).setToolTip(1, self.child(2).text(1))
+                self.trusted_child.setText(1, str(trusted))
+                self.trusted_child.setToolTip(1, str(trusted))
 
         def _on_server_change(self) -> None:
             self.setHidden(self.main_window.current_server != self.server)
@@ -395,16 +408,16 @@ class OverviewTab(QWidget):
                 info = online_player_info.info
                 self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
 
-                self.child(4).setText(1, str(info.gameMode).lower())
-                self.child(4).setToolTip(1, self.child(4).text(1))
+                self.gamemode_child.setText(1, str(info.gameMode).lower())
+                self.gamemode_child.setToolTip(1, str(info.gameMode).lower())
 
         def _on_ping_update(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
             if online_player_info.info == self.info and online_player_info.server == self.server:
                 info = online_player_info.info
                 self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
 
-                self.child(3).setText(1, "%ims" % info.ping)
-                self.child(3).setToolTip(1, self.child(3).text(1))
+                self.ping_child.setText(1, "%ims" % info.ping)
+                self.ping_child.setToolTip(1, self.ping_child.text(1))
 
 
 from ..main import MainWindow
