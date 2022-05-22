@@ -1,5 +1,7 @@
 apply plugin: "java"
 
+// jar.enabled = false
+
 sourceSets {
     main {
         java {
@@ -29,10 +31,7 @@ jar {
     from sourceSets.main.java.srcDirs.collect { // >:) x2
         it.toString().contains("python") ? it : null
     }
-    from configurations.compile.collect {
-        it.isDirectory() ? it : zipTree(it)
-    }
-    
+
     baseName = "yescom"
     classifier = "core"
 }

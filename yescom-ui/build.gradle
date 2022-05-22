@@ -1,4 +1,7 @@
 apply plugin: "java"
+apply plugin: "com.github.johnrengelman.shadow"
+
+jar.enabled = false
 
 sourceSets {
     main {
@@ -9,22 +12,38 @@ sourceSets {
 }
 
 dependencies {
+    // compile project(":yescom:chatbot")
+    compile project(":yescom:api")
     compile project(":yescom:core")
+
+    compile group: "black.ninia", name: "jep", version: "4.0.3"
 }
 
-jar {
+shadowJar {
     manifest {
         attributes("Main-Class": "ez.pogdog.yescom.ui.Main")
     }
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    // duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     from sourceSets.main.java.srcDirs.collect {
         it.toString().contains("python") ? it : null
     }
-    from configurations.compile.collect {
-        it.isDirectory() ? it : zipTree(it)
+    configurations = [project.configurations.compileClasspath]
+    /*
+    dependencies {
+        include project(":yescom:api")
+        include project(":yescom:core")
+
+        include dependency(group: "commons-cli", name: "commons-cli", version: "1.4")
+        include dependency(group: "org.yaml", name: "snakeyaml", version: "1.30")
+
+        include dependency(group: "black.ninia", name: "jep", version: "4.0.3")
+        include dependency(group: "com.github.Steveice10", name: "MCProtocolLib", version: "1.12.2-2")
     }
+     */
 
     baseName = "yescom"
     classifier = "ui"
 }
+
+build.dependsOn(shadowJar)
