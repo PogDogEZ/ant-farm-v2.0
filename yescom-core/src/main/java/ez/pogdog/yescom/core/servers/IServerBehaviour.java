@@ -1,6 +1,10 @@
 package ez.pogdog.yescom.core.servers;
 
+import com.github.steveice10.mc.protocol.packet.ingame.server.ServerChatPacket;
+import ez.pogdog.yescom.api.data.player.PlayerInfo;
+import ez.pogdog.yescom.api.data.chat.ChatMessage;
 import ez.pogdog.yescom.core.ITickable;
+import ez.pogdog.yescom.core.connection.Player;
 import ez.pogdog.yescom.core.connection.Server;
 
 import java.util.Set;
@@ -22,12 +26,32 @@ public interface IServerBehaviour extends ITickable {
     void apply(Server server);
 
     /**
+     * @return The behaviours that this behaviour overrides.
+     */
+    Set<Class<? extends IServerBehaviour>> getOverrides();
+
+    /**
      * Ticks this behaviour.
      */
     void tick();
 
     /**
-     * @return The behaviours that this behaviour overrides.
+     * Processes when a {@link PlayerInfo} joins the server.
+     * @param info The player that joined.
      */
-    Set<Class<? extends IServerBehaviour>> getOverrides();
+    void processJoin(PlayerInfo info);
+
+    /**
+     * Parses a chat message. This can be unique to different servers.
+     * @param player The player that received the message.
+     * @param packet The chat message packet.
+     * @return The parsed {@link ChatMessage}, null if it couldn't be parsed.
+     */
+    ChatMessage parseChatMessage(Player player, ServerChatPacket packet);
+
+    /**
+     * Processes when a {@link PlayerInfo} leaves the server.
+     * @param info The player that left.
+     */
+    void processLeave(PlayerInfo info);
 }

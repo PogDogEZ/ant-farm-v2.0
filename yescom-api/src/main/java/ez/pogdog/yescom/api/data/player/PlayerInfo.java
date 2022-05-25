@@ -1,13 +1,13 @@
-package ez.pogdog.yescom.api.data;
+package ez.pogdog.yescom.api.data.player;
 
-import java.text.DateFormat;
+import ez.pogdog.yescom.api.data.player.death.Death;
+import ez.pogdog.yescom.api.data.player.death.Kill;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -15,10 +15,12 @@ import java.util.UUID;
 /**
  * Stores information about a player.
  */
-public class PlayerInfo implements Cloneable {
+public final class PlayerInfo implements Cloneable {
 
     public final List<Server> servers = new ArrayList<>();
     public final Set<Session> sessions = new HashSet<>();
+    public final Set<Death> deaths = new HashSet<>();
+    public final Set<Kill> kills = new HashSet<>();
 
     public final UUID uuid;
     public final long firstSeen;
@@ -108,49 +110,6 @@ public class PlayerInfo implements Cloneable {
         @Override
         public String toString() {
             return String.format("Server(hostname=%s, port=%d)", hostname, port);
-        }
-    }
-
-    /**
-     * A session represents a time in which a player was online at.
-     */
-    public static class Session {
-
-        public final Server server;
-        public final long start;
-        public final long end;
-
-        public Session(Server server, long start, long end) {
-            this.server = server;
-            this.start = start;
-            this.end = end;
-        }
-
-        @Override
-        public boolean equals(Object other) {
-            if (this == other) return true;
-            if (other == null || getClass() != other.getClass()) return false;
-            Session session = (Session)other;
-            return start == session.start && end == session.end && server.equals(session.server);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(server, start, end);
-        }
-
-        @Override
-        public String toString() {
-            DateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy hh:mm:ss");
-            return String.format("Session(server=%s, start=%s, end=%s)", server, dateFormat.format(new Date(start)),
-                    dateFormat.format(new Date(end)));
-        }
-
-        /**
-         * @return The time played in this session, in milliseconds.
-         */
-        public int getPlayTime() {
-            return (int)(end - start);
         }
     }
 }

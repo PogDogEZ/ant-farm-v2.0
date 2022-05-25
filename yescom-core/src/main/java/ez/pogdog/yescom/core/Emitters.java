@@ -2,7 +2,9 @@ package ez.pogdog.yescom.core;
 
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.packetlib.packet.Packet;
-import ez.pogdog.yescom.api.data.PlayerInfo;
+import ez.pogdog.yescom.api.data.player.PlayerInfo;
+import ez.pogdog.yescom.api.data.chat.ChatMessage;
+import ez.pogdog.yescom.api.data.player.death.Death;
 import ez.pogdog.yescom.api.event.Emitter;
 import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.connection.Player;
@@ -76,7 +78,7 @@ public class Emitters {
     /**
      * Fired when one of the players receives a chat message.
      */
-    public static final Emitter<PlayerChat> ON_PLAYER_CHAT = new Emitter<>(PlayerChat.class);
+    public static final Emitter<ChatMessage> ON_PLAYER_CHAT = new Emitter<>(ChatMessage.class);
 
     public static final Emitter<PlayerPacket> ON_PLAYER_PACKET_IN = new Emitter<>(PlayerPacket.class);
     public static final Emitter<PlayerPacket> ON_PLAYER_PACKET_OUT = new Emitter<>(PlayerPacket.class);
@@ -104,11 +106,6 @@ public class Emitters {
     public static final Emitter<OnlinePlayerInfo> ON_ANY_PLAYER_JOIN = new Emitter<>(OnlinePlayerInfo.class);
 
     /**
-     * Fired when any player leaves the server.
-     */
-    public static final Emitter<OnlinePlayerInfo> ON_ANY_PLAYER_LEAVE = new Emitter<>(OnlinePlayerInfo.class);
-
-    /**
      * Fired when any player's gamemode changes.
      */
     public static final Emitter<OnlinePlayerInfo> ON_ANY_PLAYER_GAMEMODE_UPDATE = new Emitter<>(OnlinePlayerInfo.class);
@@ -117,6 +114,16 @@ public class Emitters {
      * Fired when any player's ping changes.
      */
     public static final Emitter<OnlinePlayerInfo> ON_ANY_PLAYER_PING_UPDATE = new Emitter<>(OnlinePlayerInfo.class);
+
+    /**
+     * Fired when any player dies.
+     */
+    public static final Emitter<OnlinePlayerDeath> ON_ANY_PLAYER_DEATH = new Emitter<>(OnlinePlayerDeath.class);
+
+    /**
+     * Fired when any player leaves the server.
+     */
+    public static final Emitter<OnlinePlayerInfo> ON_ANY_PLAYER_LEAVE = new Emitter<>(OnlinePlayerInfo.class);
 
     /* ------------------------------ Server ------------------------------ */
 
@@ -165,17 +172,6 @@ public class Emitters {
         }
     }
 
-    public static class PlayerChat {
-
-        public final Player player;
-        public final String message;
-
-        public PlayerChat(Player player, String message) {
-            this.player = player;
-            this.message = message;
-        }
-    }
-
     public static class PlayerPacket {
 
         public final Player player;
@@ -195,6 +191,17 @@ public class Emitters {
         public OnlinePlayerInfo(PlayerInfo info, Server server) {
             this.info = info;
             this.server = server;
+        }
+    }
+
+    public static class OnlinePlayerDeath extends OnlinePlayerInfo {
+
+        public final Death death;
+
+        public OnlinePlayerDeath(PlayerInfo info, Server server, Death death) {
+            super(info, server);
+
+            this.death = death;
         }
     }
 }

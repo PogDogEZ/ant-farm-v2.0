@@ -4,10 +4,15 @@ import com.google.gson.JsonParser;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+
 /**
  * Global instances of useful objects.
  */
 public class Globals {
+
+    public static final DateFormat DATE_FORMAT = new SimpleDateFormat("dd-MM-yyyy hh:mm:ss");
 
     /**
      * YAML instance.

@@ -2,12 +2,11 @@ package ez.pogdog.yescom.core.data;
 
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
-import ez.pogdog.yescom.api.data.PlayerInfo;
+import ez.pogdog.yescom.api.data.player.PlayerInfo;
+import ez.pogdog.yescom.api.data.player.Session;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
-import ez.pogdog.yescom.core.connection.Player;
-import ez.pogdog.yescom.core.connection.Server;
 
 import java.io.EOFException;
 import java.io.File;
@@ -79,13 +78,15 @@ public class PlayersHandler implements IConfig, ISerialiser {
     public void save(File dataDirectory) throws IOException {
         savePlayerCache(dataDirectory);
 
-        Set<PlayerInfo> dirty = new HashSet<>();
-        for (PlayerInfo info : playerCache.values()) {
-            if (!info.sessions.isEmpty()) dirty.add(info);
+        synchronized (sessionFilesCache) {
+            Set<PlayerInfo> dirty = new HashSet<>();
+            for (PlayerInfo info : playerCache.values()) {
+                if (!info.sessions.isEmpty()) dirty.add(info);
+            }
+            saveDirtySession(dataDirectory, dirty);
+            for (PlayerInfo info : dirty) info.sessions.clear(); // Servers don't take up enough space to care about
+            // saveSessionFilesCache(dataDirectory);
         }
-        saveDirtySession(dataDirectory, dirty);
-        for (PlayerInfo info : dirty) info.sessions.clear(); // Servers don't take up enough space to care about
-        // saveSessionFilesCache(dataDirectory);
     }
 
     /* ------------------------------ Serialisation ------------------------------ */
@@ -279,6 +280,37 @@ public class PlayersHandler implements IConfig, ISerialiser {
 
     public PlayerInfo getInfo(UUID uuid) {
         return getInfo(uuid, null, null, -1, null);
+    }
+
+    /**
+     * Gets the recorded sessions for a given player.
+     * @param info The player info.
+     * @return The recorded sessions.
+     */
+    public Set<Session> getSessions(PlayerInfo info) {
+        if (!sessionFilesCache.containsKey(info.uuid)) return Collections.emptySet();
+
+        synchronized (sessionFilesCache) {
+            try {
+                // Should read the data into the provided info
+                readSessionFile(sessionFilesCache.get(info.uuid), Collections.singletonMap(info.uuid, info));
+                return new HashSet<>(info.sessions); // Copy this so we don't clear it
+
+            } catch (IOException error) {
+                logger.warning(String.format("Couldn't read session data for %s: %s", info.uuid, error.getMessage()));
+                logger.throwing(getClass().getSimpleName(), "getSessions", error);
+                return Collections.emptySet();
+            }
+        }
+    }
+
+    /**
+     * Gets the recorded sessions for a given player.
+     * @param uuid The UUID of the player.
+     * @return The recorded sessions.
+     */
+    public Set<Session> getSessions(UUID uuid) {
+        return getSessions(playerCache.get(uuid));
     }
 
     /**

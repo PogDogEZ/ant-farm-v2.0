@@ -1,6 +1,7 @@
 package ez.pogdog.yescom.core.data;
 
-import ez.pogdog.yescom.api.data.PlayerInfo;
+import ez.pogdog.yescom.api.data.player.PlayerInfo;
+import ez.pogdog.yescom.api.data.player.Session;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -10,9 +11,7 @@ import java.math.BigInteger;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -137,16 +136,14 @@ public final class Serial {
             PlayerInfo info = infos.get(uuid);
             if (info == null || !info.uuid.equals(uuid)) {
                 info = new PlayerInfo(uuid, firstSeen);
-            } else {
-                info.servers.clear();
-                info.sessions.clear();
             }
 
             int serversCount = readInteger(inputStream);
             for (int index = 0; index < serversCount; ++index) {
                 String hostname = Serial.Read.readString(inputStream);
                 int port = Serial.Read.readInteger(inputStream);
-                info.servers.add(new PlayerInfo.Server(hostname, port));
+                PlayerInfo.Server server = new PlayerInfo.Server(hostname, port);
+                if (!info.servers.contains(server)) info.servers.add(server); // Not a set :(
             }
 
             int sessionsCount = readInteger(inputStream);
@@ -154,7 +151,7 @@ public final class Serial {
                 int serverIndex = readInteger(inputStream);
                 long start = readLong(inputStream);
                 long delta = readLong(inputStream);
-                info.sessions.add(new PlayerInfo.Session(info.servers.get(serverIndex), firstSeen + start,
+                info.sessions.add(new Session(info.servers.get(serverIndex), firstSeen + start,
                         firstSeen + start + delta));
             }
 
@@ -255,7 +252,7 @@ public final class Serial {
             }
 
             writeInteger(info.sessions.size(), outputStream);
-            for (PlayerInfo.Session session : info.sessions) {
+            for (Session session : info.sessions) {
                 writeInteger(info.servers.indexOf(session.server), outputStream);
                 writeLong(session.start - info.firstSeen, outputStream);
                 writeLong(session.end - session.start, outputStream);

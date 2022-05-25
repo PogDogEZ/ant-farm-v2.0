@@ -440,10 +440,15 @@ public class Player implements IConfig, ITickable {
                 lastPacketTime = System.currentTimeMillis();
             } else {
                 // For checking that this actually works lol
-                logger.finest(String.format("%s: %s", getUsername(), /* server.hostname, server.port, */
-                        Chat.unwrap(((ServerChatPacket)event.getPacket()).getMessage(), true)));
-                Emitters.ON_PLAYER_CHAT.emit(new Emitters.PlayerChat(Player.this, // FIXME: Improve chat messages
-                        ((ServerChatPacket)event.getPacket()).getMessage().getFullText()));
+                logger.finest(String.format(
+                        "%s: \u001b[0m%s", getUsername(), /* server.hostname, server.port, */
+                        MinecraftChat.unwrap(
+                                Globals.JSON.parse(event.<ServerChatPacket>getPacket().getMessageText()),
+                                MinecraftChat.ANSI_COLOURS
+                        )
+                ));
+                ChatMessage message = server.parseChatMessage(Player.this, event.getPacket());
+                if (message != null) server.handleChatMessage(message); // Can be ignored by the server, etc
             }
 
             if (event.getPacket() instanceof ServerPlayerPositionRotationPacket) {

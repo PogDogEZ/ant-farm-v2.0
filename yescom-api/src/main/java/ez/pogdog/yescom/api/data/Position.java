@@ -5,7 +5,7 @@ import java.util.Objects;
 /**
  * Immutable position type.
  */
-public class Position implements Cloneable {
+public final class Position implements Cloneable {
 
     public double x;
     public double y;

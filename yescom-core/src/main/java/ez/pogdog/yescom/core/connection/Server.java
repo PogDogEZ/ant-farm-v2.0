@@ -4,6 +4,7 @@ import com.github.steveice10.mc.auth.data.GameProfile;
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.mc.protocol.data.game.PlayerListEntry;
 import com.github.steveice10.mc.protocol.data.game.PlayerListEntryAction;
+import com.github.steveice10.mc.protocol.packet.ingame.server.ServerChatPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.server.ServerPlayerListEntryPacket;
 import com.github.steveice10.packetlib.event.session.PacketReceivedEvent;
 import com.github.steveice10.packetlib.event.session.SessionAdapter;
@@ -13,7 +14,10 @@ import ez.pogdog.yescom.api.Globals;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.ChunkPosition;
 import ez.pogdog.yescom.api.data.Dimension;
-import ez.pogdog.yescom.api.data.PlayerInfo;
+import ez.pogdog.yescom.api.data.player.PlayerInfo;
+import ez.pogdog.yescom.api.data.chat.ChatMessage;
+import ez.pogdog.yescom.api.data.player.Session;
+import ez.pogdog.yescom.api.data.player.death.Death;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.ITickable;
 import ez.pogdog.yescom.core.account.IAccount;
@@ -26,12 +30,14 @@ import ez.pogdog.yescom.core.report.connection.HighTSLPReport;
 import ez.pogdog.yescom.core.servers.IServerBehaviour;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.UUID;
@@ -98,12 +104,14 @@ public class Server implements IConfig, ITickable {
     /* ------------------------------ Other fields ------------------------------ */
 
     public final List<IQueryHandle<?>> handles = new ArrayList<>(); // TODO: More specific for loaded queries
-    public final List<IServerBehaviour> behaviours = new ArrayList<>();
+    public final IServerBehaviour behaviour;
 
     public final ServerSessionAdapter adapter = new ServerSessionAdapter();
 
     public final String hostname;
     public final int port;
+
+    public final PlayerInfo.Server serverInfo;
 
     // Direct references for ease, it's hacky but who cares
     public final InvalidMoveHandle overworldInvalidMoveHandle;
@@ -112,8 +120,7 @@ public class Server implements IConfig, ITickable {
 
     private final Map<UUID, Long> onlinePlayers = new HashMap<>();
     private final List<Player> players = new CopyOnWriteArrayList<>();
-
-    private final PlayerInfo.Server serverInfo;
+    private final Queue<ChatMessage> chatMessages = new ArrayDeque<>();
 
     private boolean connected;
     private int renderDistance;
@@ -150,14 +157,18 @@ public class Server implements IConfig, ITickable {
 
         logger.fine(String.format("%d handle(s) for server %s:%d.", handles.size(), hostname, port));
 
+        Set<IServerBehaviour> behaviours = new HashSet<>();
         for (IServerBehaviour behaviour : ServiceLoader.load(IServerBehaviour.class)) {
-            if (behaviour.isValid(this)) {
-                logger.fine(String.format("Registered valid behaviour %s for %s:%d.", behaviour, hostname, port));
-                behaviour.apply(this);
-                behaviours.add(behaviour);
-            }
+            if (behaviour.isValid(this)) behaviours.add(behaviour);
         }
-        logger.fine(String.format("%d behaviour(s) for server %s:%d.", behaviours.size(), hostname, port));
+        for (IServerBehaviour behaviour : new ArrayList<>(behaviours))
+            behaviours.removeIf(behaviour0 -> behaviour.getOverrides().contains(behaviour0.getClass()));
+
+        behaviour = behaviours.iterator().next();
+        logger.fine(String.format("Registered valid behaviour %s for %s:%d.", behaviour, hostname, port));
+        behaviour.apply(this);
+
+        // logger.fine(String.format("%d behaviour(s) for server %s:%d.", behaviours.size(), hostname, port));
 
         connectionTime = System.currentTimeMillis();
         lastLoginTime = System.currentTimeMillis() - GLOBAL_LOGIN_TIME.value;
@@ -259,6 +270,12 @@ public class Server implements IConfig, ITickable {
             }
 
             tickrate /= connectedCount;
+            if (tickrate < 0.0f) { // Make the tickrate more reasonable
+                tickrate = 20.0f;
+            } else if (tickrate > 75.0f) {
+                tickrate = 75.0f;
+            }
+
             ping /= connectedCount;
             if (tslp > HIGH_TSLP.value) {
                 if (tslp - lastHighTslp > HIGH_TSLP.value) {
@@ -279,7 +296,7 @@ public class Server implements IConfig, ITickable {
 
             synchronized (onlinePlayers) { // If we aren't connected then we don't know anything about the online players
                 if (!onlinePlayers.isEmpty()) {
-                    for (UUID uuid : new ArrayList<>(onlinePlayers.keySet())) handleDisconnect(uuid);
+                    for (UUID uuid : new ArrayList<>(onlinePlayers.keySet())) handleDisconnect(yesCom.playersHandler.getInfo(uuid));
                     onlinePlayers.clear();
                 }
             }
@@ -307,6 +324,8 @@ public class Server implements IConfig, ITickable {
                     hostname, port, players.size(), processingSize, waitingSize, tickrate, ping, queriesPerSecond));
             lastStatsTime = System.currentTimeMillis();
         }
+
+        behaviour.tick();
     }
 
     /* ------------------------------ Public API ------------------------------ */
@@ -470,33 +489,72 @@ public class Server implements IConfig, ITickable {
 
     /**
      * Handles when any player connects to the server.
-     * @param uuid The UUID of the player that connected.
+     * @param player The player that connected.
      */
-    public void handleConnect(UUID uuid) {
+    public void handleConnect(PlayerInfo player) {
         synchronized (onlinePlayers) {
-            if (!onlinePlayers.containsKey(uuid)) {
-                PlayerInfo info = yesCom.playersHandler.getInfo(uuid);
-                if (!info.servers.contains(serverInfo)) info.servers.add(serverInfo);
+            if (!onlinePlayers.containsKey(player.uuid)) {
+                if (!player.servers.contains(serverInfo)) player.servers.add(serverInfo);
 
-                onlinePlayers.put(uuid, System.currentTimeMillis());
-                Emitters.ON_ANY_PLAYER_JOIN.emit(new Emitters.OnlinePlayerInfo(info, this));
+                onlinePlayers.put(player.uuid, System.currentTimeMillis());
+                Emitters.ON_ANY_PLAYER_JOIN.emit(new Emitters.OnlinePlayerInfo(player, this));
+            }
+        }
+    }
+
+    /**
+     * Parses a chat message.
+     * @param player The player that received the message.
+     * @param packet The server chat packet.
+     * @return A {@link ChatMessage}, if null this message should be discarded.
+     */
+    public ChatMessage parseChatMessage(Player player, ServerChatPacket packet) {
+        ChatMessage chatMessage = behaviour.parseChatMessage(player, packet);
+        if (chatMessage != null) handleChatMessage(chatMessage);
+        return chatMessage;
+    }
+
+    /**
+     * Handles a chat message.
+     * @param chatMessage The chat message to handle.
+     */
+    public void handleChatMessage(ChatMessage chatMessage) {
+        synchronized (chatMessages) {
+            if (!chatMessages.contains(chatMessage)) {
+                chatMessages.add(chatMessage);
+                Emitters.ON_PLAYER_CHAT.emit(chatMessage);
+            }
+        }
+    }
+
+    /**
+     * Handles when any player dies on this server.
+     * @param player The player that died.
+     * @param death The {@link Death}.
+     */
+    public void handleDeath(PlayerInfo player, Death death) {
+        synchronized (onlinePlayers) {
+            if (!player.deaths.contains(death)) {
+                if (!player.servers.contains(serverInfo)) player.servers.add(serverInfo);
+
+                player.deaths.add(death);
+                Emitters.ON_ANY_PLAYER_DEATH.emit(new Emitters.OnlinePlayerDeath(player, this, death));
             }
         }
     }
 
     /**
      * Handles when any player disconnects from this server.
-     * @param uuid The UUID of the player that disconnected.
+     * @param player The player that disconnected.
      */
-    public void handleDisconnect(UUID uuid) {
+    public void handleDisconnect(PlayerInfo player) {
         synchronized (onlinePlayers) {
-            if (onlinePlayers.containsKey(uuid)) {
-                PlayerInfo info = yesCom.playersHandler.getInfo(uuid);
-                if (!info.servers.contains(serverInfo)) info.servers.add(serverInfo);
+            if (onlinePlayers.containsKey(player.uuid)) {
+                if (!player.servers.contains(serverInfo)) player.servers.add(serverInfo);
 
-                info.sessions.add(new PlayerInfo.Session(serverInfo, onlinePlayers.get(uuid), System.currentTimeMillis()));
-                onlinePlayers.remove(uuid);
-                Emitters.ON_ANY_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(info, this));
+                player.sessions.add(new Session(serverInfo, onlinePlayers.get(player.uuid), System.currentTimeMillis()));
+                onlinePlayers.remove(player.uuid);
+                Emitters.ON_ANY_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(player, this));
             }
         }
     }
@@ -510,11 +568,19 @@ public class Server implements IConfig, ITickable {
 
     /**
      * @param uuid The UUID of the player to check.
+     * @return When the player's current online session started, in milliseconds.
+     */
+    public long getSessionStartTime(UUID uuid) {
+        return onlinePlayers.getOrDefault(uuid, -1L);
+    }
+
+    /**
+     * @param uuid The UUID of the player to check.
      * @return How long the player has been online for, in milliseconds.
      */
-    public long getOnlineTime(UUID uuid) {
-        if (!onlinePlayers.containsKey(uuid)) return 0;
-        return System.currentTimeMillis() - onlinePlayers.getOrDefault(uuid, System.currentTimeMillis());
+    public long getSessionPlayTime(UUID uuid) {
+        long currentTime = System.currentTimeMillis();
+        return currentTime - onlinePlayers.getOrDefault(uuid, currentTime + 1);
     }
 
     /* ------------------------------ Setters and getters ------------------------------ */
@@ -618,15 +684,15 @@ public class Server implements IConfig, ITickable {
                                 logger.throwing(getClass().getSimpleName(), "packetReceived", error);
                             }
                         }
-                        yesCom.playersHandler.getInfo(
+                        PlayerInfo info = yesCom.playersHandler.getInfo(
                                 uuid, entry.getProfile().getName(), skinURL, entry.getPing(),
                                 PlayerInfo.GameMode.valueOf(entry.getGameMode().name()) // FIXME: This is a hack
                         );
 
-                        handleConnect(uuid);
+                        behaviour.processJoin(info);
 
                     } else if (packet.getAction() == PlayerListEntryAction.REMOVE_PLAYER) {
-                        handleDisconnect(uuid);
+                        behaviour.processLeave(yesCom.playersHandler.getInfo(uuid));
 
                     } else if (packet.getAction() == PlayerListEntryAction.UPDATE_GAMEMODE) {
                         synchronized (onlinePlayers) {
