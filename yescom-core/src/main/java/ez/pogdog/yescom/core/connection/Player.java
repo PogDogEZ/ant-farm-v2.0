@@ -267,6 +267,8 @@ public class Player implements IConfig, ITickable {
                 logger.warning(String.format("Failed to connect %s to %s:%d: %s", getUsername(), server.hostname, server.port, error.getMessage()));
                 logger.throwing(getClass().getSimpleName(), "connect", error);
 
+                --failedConnections; // Server might be down, don't waste time waiting for it, we want to reconncet ASAP
+
                 // lastLoginTime += server.AUTO_RECONNECT_TIME.value * (long)failedConnections++; // Don't spam connection attempts
             }
         }
@@ -619,7 +621,7 @@ public class Player implements IConfig, ITickable {
 
             lastLoginTime = System.currentTimeMillis();
             if (!isSpawned()) {
-                lastLoginTime += server.AUTO_RECONNECT_TIME.value * (long)failedConnections++;
+                lastLoginTime += server.AUTO_RECONNECT_TIME.value * Math.min(10, (long)failedConnections++);
                 logger.finer(String.format("%s has %d failed connection attempt(s).", getUsername(), failedConnections));
             }
 

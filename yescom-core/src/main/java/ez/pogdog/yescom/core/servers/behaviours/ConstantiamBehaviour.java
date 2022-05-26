@@ -183,7 +183,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
 
         } else {
             // 75ms for the benefit of the doubt that we guessed the server tickrate wrong
-            expectedTime = AEF_RESPAWN_VANISH_TICKS.value * 75.0f * (Math.min(20.0f, server.getTPS()) / 20.0f);
+            expectedTime = AEF_RESPAWN_VANISH_TICKS.value * 75.0f * (20.0f / Math.min(20.0f, Math.max(0.1f, server.getTPS())));
             for (Map.Entry<PlayerInfo, Long> entry : processingDisconnects.entrySet()) {
                 if (System.currentTimeMillis() - entry.getValue() > expectedTime) {
                     logger.finest(String.format("Player %s disconnect has timed out (%dms / %.1fms), handling.", entry.getKey(),

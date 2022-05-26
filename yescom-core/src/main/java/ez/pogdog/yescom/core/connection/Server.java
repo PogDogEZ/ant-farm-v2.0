@@ -269,6 +269,11 @@ public class Server implements IConfig, ITickable {
                 Emitters.ON_CONNECTION_ESTABLISHED.emit(this);
             }
 
+            // So in retrospect, obviously this isn't the actual server tickrate, what this is measuring instead is
+            // perceived tickrate, which is good enough for our purposes as we're merely representing how quickly we're
+            // getting packets from the server which is going to be used by other parts of the application for certain
+            // calculations. Obviously though, it might be useful to record an actual server tickrate (if that is
+            // actually possible to measure accurately) for the user to see and/or for the recorded server data
             tickrate /= connectedCount;
             if (tickrate < 0.0f) { // Make the tickrate more reasonable
                 tickrate = 20.0f;
