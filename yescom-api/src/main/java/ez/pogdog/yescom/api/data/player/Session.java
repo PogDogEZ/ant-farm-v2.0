@@ -10,11 +10,11 @@ import java.util.Objects;
  */
 public class Session {
 
-    public final PlayerInfo.Server server;
+    public final PlayerInfo.ServerInfo server;
     public final long start;
     public final long end;
 
-    public Session(PlayerInfo.Server server, long start, long end) {
+    public Session(PlayerInfo.ServerInfo server, long start, long end) {
         this.server = server;
         this.start = start;
         this.end = end;

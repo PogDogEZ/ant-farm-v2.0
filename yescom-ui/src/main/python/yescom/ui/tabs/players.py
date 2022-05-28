@@ -12,7 +12,7 @@ from java.util import UUID
 
 from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
-from ez.pogdog.yescom.api.data import PlayerInfo
+from ez.pogdog.yescom.api.data.player import PlayerInfo
 from ez.pogdog.yescom.core import Emitters
 from ez.pogdog.yescom.core.account import IAccount
 from ez.pogdog.yescom.core.account.accounts import Microsoft, Mojang

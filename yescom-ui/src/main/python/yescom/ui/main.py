@@ -41,6 +41,8 @@ class MainWindow(QMainWindow):
     player_login = pyqtSignal(object)
     player_logout = pyqtSignal(object)
 
+    player_chat = pyqtSignal(object)
+
     player_position_update = pyqtSignal(object)
     player_health_update = pyqtSignal(object)
     player_server_stats_update = pyqtSignal(object)
@@ -144,6 +146,8 @@ class MainWindow(QMainWindow):
 
         emitters.ON_PLAYER_LOGIN.connect(self.player_login.emit)
         emitters.ON_PLAYER_LOGOUT.connect(self.player_logout.emit)
+
+        emitters.ON_PLAYER_CHAT.connect(self.player_chat.emit)
 
         emitters.ON_PLAYER_POSITION_UPDATE.connect(self.player_position_update.emit)
         emitters.ON_PLAYER_HEALTH_UPDATE.connect(self.player_health_update.emit)

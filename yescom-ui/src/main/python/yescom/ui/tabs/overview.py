@@ -14,7 +14,7 @@ from java.util import UUID
 
 from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
-from ez.pogdog.yescom.api.data import PlayerInfo
+from ez.pogdog.yescom.api.data.player import PlayerInfo
 from ez.pogdog.yescom.core import Emitters
 from ez.pogdog.yescom.core.connection import Player, Server
 
@@ -42,8 +42,17 @@ class OverviewTab(QWidget):
         self.main_window.connection_established.connect(self._on_server_changed)
         self.main_window.connection_lost.connect(self._on_server_changed)
 
-        self.main_window.any_player_joined.connect(self._on_player_joined)
-        self.main_window.any_player_left.connect(self._on_player_left)
+        self.main_window.any_player_joined.connect(
+            lambda online_player_info: self._on_player_joined(online_player_info.info, online_player_info.server),
+        )
+        self.main_window.any_player_left.connect(
+            lambda online_player_info: self._on_player_left(online_player_info.info, online_player_info.server),
+        )
+
+        current = self.main_window.current_server
+        if current is not None:
+            for uuid in current.getOnlinePlayers().keySet():
+                self._on_player_joined(self.yescom.playersHandler.getInfo(uuid), current)
 
     def __repr__(self) -> str:
         return "<OverviewTab() at %x>" % id(self)
@@ -186,19 +195,19 @@ class OverviewTab(QWidget):
             self.main_window.current_server is not None and self.main_window.current_server.isConnected()
         )
 
-    def _on_player_joined(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
+    def _on_player_joined(self, info: PlayerInfo, server: Server) -> None:
         for top_level_index in range(self.online_players_tree.topLevelItemCount()):
-            if self.online_players_tree.topLevelItem(top_level_index).info == online_player_info.info:
+            if info == self.online_players_tree.topLevelItem(top_level_index).info:
                 return
         self._on_server_changed()
         self.online_players_tree.addTopLevelItem(OverviewTab.OnlinePlayerItem(
-            self.online_players_tree, online_player_info.server, online_player_info.info,
+            self.online_players_tree, info, server,
         ))
 
-    def _on_player_left(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
+    def _on_player_left(self, info: PlayerInfo, server: Server) -> None:
         for top_level_index in range(self.online_players_tree.topLevelItemCount()):
             item = self.online_players_tree.topLevelItem(top_level_index)
-            if item.info == online_player_info.info and item.server == online_player_info.server:
+            if info == item.info and server == item.server:
                 self._on_server_changed()
                 self.online_players_tree.takeTopLevelItem(top_level_index)
                 return
@@ -300,14 +309,14 @@ class OverviewTab(QWidget):
 
         tooltip = "%s\nServer: %s:%i.\nPing: %%ims\nGamemode: %%s\nRight click for more options."
 
-        def __init__(self, parent: "OverviewTab.OnlinePlayersTree", server: Server, info: PlayerInfo) -> None:
+        def __init__(self, parent: "OverviewTab.OnlinePlayersTree", info: PlayerInfo, server: Server) -> None:
             super().__init__(parent)
 
             self.yescom = YesCom.getInstance()
             self.main_window = MainWindow.INSTANCE
 
-            self.server = server
             self.info = info
+            self.server = server
 
             uuid = info.uuid  # Crazy optimisations
             name = self.yescom.playersHandler.getName(uuid, str(uuid))  # When would this not resolve?

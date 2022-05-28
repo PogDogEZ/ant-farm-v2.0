@@ -17,6 +17,7 @@ public interface ISerialiser {
     /**
      * Saves the data to the data directory.
      * @param dataDirectory The provided data directory.
+     * @param force Force the file to save.
      */
-    void save(File dataDirectory) throws IOException;
+    void save(File dataDirectory, boolean force) throws IOException;
 }

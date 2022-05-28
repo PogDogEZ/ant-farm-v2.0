@@ -71,10 +71,10 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
             "^(?<player>[A-Za-z0-9_]{1,20}) whispers: (?<message>.*)"
     );
 
-    private final Map<PlayerInfo, Long> processingDisconnects = new ConcurrentHashMap<>();
-    private final Map<PlayerInfo, Long> recentDeaths = new ConcurrentHashMap<>();
-    private final Map<PlayerInfo, Long> recentLeaves = new ConcurrentHashMap<>();
-    private final Map<Player, Queue<ChatMessage>> queuedMessages = new HashMap<>();
+    private final Map<UUID, Long> processingDisconnects = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> recentDeaths = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> recentLeaves = new ConcurrentHashMap<>();
+    private final Map<Player, Queue<ChatMessage>> queuedMessages = new ConcurrentHashMap<>();
 
     private float expectedTime = 150.0f;
 
@@ -103,6 +103,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) transformed themselves into a corpse$"), Death.Type.SLASH_KILL);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) couldn't take it any longer$"), Death.Type.SLASH_KILL);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) became a virgin sacrifice$"), Death.Type.SLASH_KILL);
+        deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) died\\.\\.\\. somehow$"), Death.Type.SLASH_KILL);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) ended their life$"), Death.Type.SLASH_KILL);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) committed sudoku$"), Death.Type.SLASH_KILL);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) did the Epstein$"), Death.Type.SLASH_KILL);
@@ -111,14 +112,17 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) has voted$"), Death.Type.SLASH_KILL);
 
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) decided to jump into lava$"), Death.Type.FIRE);
+        deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) tried to swim in lava$"), Death.Type.FIRE);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) became charcoal$"), Death.Type.FIRE);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) became lava$"), Death.Type.FIRE);
 
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) is sleeping with the fishes$"), Death.Type.DROWNING);
+        deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20})'s lungs are now an aquarium$"), Death.Type.DROWNING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) forgot their oxygen tank$"), Death.Type.DROWNING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) drowned$"), Death.Type.DROWNING);
 
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) suffocated in a wall$"), Death.Type.SUFFOCATION);
+        deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) became a fossil$"), Death.Type.SUFFOCATION);
 
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20})'s hunger strike gained them nothing$"), Death.Type.STARVING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) forgot their melons$"), Death.Type.STARVING);
@@ -149,6 +153,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) ended (?<killer>[A-Za-z0-9_]{1,20}) using .+"), Death.Type.MELEE);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) never saw (?<killer>[A-Za-z0-9_]{1,20}) coming$"), Death.Type.MELEE);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) had a date with (?<killer>[A-Za-z0-9_]{1,20})'s .+"), Death.Type.MELEE);
+        deathMessages.put(Pattern.compile("^(?<killer>[A-Za-z0-9_]{1,20}) threw (?<player>[A-Za-z0-9_]{1,20}) to their death$"), Death.Type.MELEE);
 
         yesCom.configHandler.addConfiguration(this);
     }
@@ -184,12 +189,12 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
         } else {
             // 75ms for the benefit of the doubt that we guessed the server tickrate wrong
             expectedTime = AEF_RESPAWN_VANISH_TICKS.value * 75.0f * (20.0f / Math.min(20.0f, Math.max(0.1f, server.getTPS())));
-            for (Map.Entry<PlayerInfo, Long> entry : processingDisconnects.entrySet()) {
+            for (Map.Entry<UUID, Long> entry : processingDisconnects.entrySet()) {
                 if (System.currentTimeMillis() - entry.getValue() > expectedTime) {
                     logger.finest(String.format("Player %s disconnect has timed out (%dms / %.1fms), handling.", entry.getKey(),
                             System.currentTimeMillis() - entry.getValue(), expectedTime));
                     processingDisconnects.remove(entry.getKey());
-                    server.handleDisconnect(entry.getKey()); // Assume they disconnected, not much else we can do
+                    server.handleDisconnect(yesCom.playersHandler.getInfo(entry.getKey())); // Assume they disconnected, not much else we can do
                 }
             }
 
@@ -202,7 +207,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                 //         recentDeaths.remove(entry.getKey());
                 //     }
                 // }
-                for (Map.Entry<PlayerInfo, Long> entry : recentLeaves.entrySet()) {
+                for (Map.Entry<UUID, Long> entry : recentLeaves.entrySet()) {
                     if (System.currentTimeMillis() - entry.getValue() > server.HIGH_TSLP.value) {
                         logger.finest(String.format("Player %s logout has timed out (%dms).", entry.getKey(),
                                 System.currentTimeMillis() - entry.getValue()));
@@ -218,13 +223,13 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
         // Even if they weren't "disconnected", the server will make sure it doesn't fire a second event
         server.handleConnect(info);
         flushQueue();
-        if (processingDisconnects.containsKey(info)) {
+        if (processingDisconnects.containsKey(info.uuid)) {
             // Sometimes we don't get a death message so yeah
-            if (System.currentTimeMillis() - processingDisconnects.get(info) < expectedTime && !recentLeaves.containsKey(info)) {
-                server.handleDeath(info, new Death(server.serverInfo, processingDisconnects.get(info), Death.Type.GENERIC));
+            if (System.currentTimeMillis() - processingDisconnects.get(info.uuid) < expectedTime && !recentLeaves.containsKey(info.uuid)) {
+                server.handleDeath(info, new Death(server.serverInfo, processingDisconnects.get(info.uuid), Death.Type.GENERIC));
                 logger.finest(String.format("Player %s has died.", info));
             }
-            processingDisconnects.remove(info); // Joined again so notify immediately
+            processingDisconnects.remove(info.uuid); // Joined again so notify immediately
         }
     }
 
@@ -251,7 +256,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                 // https://github.com/moom0o/AnarchyExploitFixes/blob/2779vZwb5E8nGKEdV65299d10ddc3e8d538d8e767dfa629e23e2ca6/src/main/java/me/moomoo/anarchyexploitfixes/prevention/CoordExploits.java#L33
                 if (!recentDeaths.containsKey(deathMessage.player)) { // Fire death event if needed
                     recentDeaths.put(deathMessage.player, System.currentTimeMillis());
-                    server.handleDeath(deathMessage.player, deathMessage.death);
+                    server.handleDeath(yesCom.playersHandler.getInfo(deathMessage.player), deathMessage.death);
                 }
 
                 processingDisconnects.remove(deathMessage.player); // The player didn't disconnect, they just died
@@ -268,7 +273,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                     if (processingDisconnects.containsKey(joinLeave.player)) {
                         processingDisconnects.remove(joinLeave.player);
                         recentLeaves.remove(joinLeave.player);
-                        server.handleDisconnect(joinLeave.player);
+                        server.handleDisconnect(yesCom.playersHandler.getInfo(joinLeave.player));
 
                         logger.finest(String.format("Player %s has disconnected.", joinLeave.player));
                     }
@@ -286,14 +291,14 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
 
     @Override
     public synchronized void processLeave(PlayerInfo info) {
-        if (recentDeaths.containsKey(info)) { // The player just died, don't handle as a disconnect
-            recentDeaths.remove(info);
-        } else if (recentLeaves.containsKey(info)) { // We can be sure that they just left
-            recentLeaves.remove(info);
+        if (recentDeaths.containsKey(info.uuid)) { // The player just died, don't handle as a disconnect
+            recentDeaths.remove(info.uuid);
+        } else if (recentLeaves.containsKey(info.uuid)) { // We can be sure that they just left
+            recentLeaves.remove(info.uuid);
             server.handleDisconnect(info);
         } else {
             logger.finest(String.format("Processing disconnect for %s...", info));
-            processingDisconnects.put(info, System.currentTimeMillis());
+            processingDisconnects.put(info.uuid, System.currentTimeMillis());
         }
         // server.handleDisconnect(info);
     }
@@ -316,10 +321,10 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                     server.handleChatMessage(entry.getValue().poll());
                 } else {
                     QueuedJoinMessage queuedJoin = (QueuedJoinMessage)message;
-                    PlayerInfo info = getByName(queuedJoin.playerName);
+                    PlayerInfo info = yesCom.playersHandler.getInfo(queuedJoin.playerName);
                     if (info != null) {
                         server.handleChatMessage(new JoinLeaveMessage(queuedJoin.timestamp, queuedJoin.receiver,
-                                queuedJoin.message, info, true));
+                                queuedJoin.message, info.uuid, true));
                         entry.getValue().poll();
                     } else {
                         break; // Still haven't found the name of the player that joined
@@ -332,14 +337,6 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                 logger.finest(String.format("Flushed message queue for player %s.", entry.getKey()));
             }
         }
-    }
-
-    private PlayerInfo getByName(String username) { // FIXME: Faster way of doing this
-        if (username == null || username.isBlank()) return null;
-        for (PlayerInfo info : yesCom.playersHandler.getPlayerCache().values()) {
-            if (info.username.equalsIgnoreCase(username)) return info;
-        }
-        return null;
     }
 
     private void getDarkAquaStrings(JsonObject message, List<String> darkAquaStrings) {
@@ -363,15 +360,15 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                 for (Map.Entry<Pattern, Death.Type> entry : deathMessages.entrySet()) {
                     Matcher matcher = entry.getKey().matcher(unformatted);
                     if (matcher.matches()) {
-                        PlayerInfo player = getByName(matcher.group("player"));
+                        PlayerInfo player = yesCom.playersHandler.getInfo(matcher.group("player"));
                         PlayerInfo killer = null;
                         try {
-                            killer = getByName(matcher.group("killer"));
+                            killer = yesCom.playersHandler.getInfo(matcher.group("killer"));
                         } catch (IllegalArgumentException ignored) {
                         }
 
-                        return new DeathMessage(timestamp, receiver, fullMessage, player,
-                                new Death(server.serverInfo, timestamp, entry.getValue(), killer));
+                        return new DeathMessage(timestamp, receiver, fullMessage, player.uuid,
+                                new Death(server.serverInfo, timestamp, entry.getValue(), killer == null ? null : killer.uuid));
                     }
                 }
 
@@ -382,8 +379,8 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                 getDarkAquaStrings(message, darkAquaStrings);
 
                 if (darkAquaStrings.size() == 1) { // Only one player involved
-                    PlayerInfo player = getByName(darkAquaStrings.get(0).split("'")[0].strip()); // "<player>'s "
-                    return new DeathMessage(timestamp, receiver, fullMessage, player,
+                    PlayerInfo player = yesCom.playersHandler.getInfo(darkAquaStrings.get(0).split("'")[0].strip()); // "<player>'s "
+                    return new DeathMessage(timestamp, receiver, fullMessage, player.uuid,
                             new Death(server.serverInfo, timestamp, Death.Type.GENERIC));
 
                 } else if (darkAquaStrings.size() == 2) { // Two players involved?
@@ -391,12 +388,12 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                     String[] playerUsername = darkAquaStrings.get(0).split("'");
                     // Check it's not a wither name or something similar
                     if (playerUsername.length == 1 || playerUsername[1].length() <= 2)
-                        player = getByName(playerUsername[0].strip());
+                        player = yesCom.playersHandler.getInfo(playerUsername[0].strip());
 
                     PlayerInfo killer = null;
                     String[] killerUsername = darkAquaStrings.get(1).split("'");
                     if (killerUsername.length == 1 || killerUsername[1].length() <= 2)
-                        killer = getByName(darkAquaStrings.get(1).split("'")[0].strip());
+                        killer = yesCom.playersHandler.getInfo(darkAquaStrings.get(1).split("'")[0].strip());
 
                     if (player == null && killer == null) {
                         return null; // Can't get any information from this
@@ -411,8 +408,8 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                         killer = oldPlayer;
                     }
 
-                    return new DeathMessage(timestamp, receiver, fullMessage, player,
-                            new Death(server.serverInfo, timestamp, Death.Type.GENERIC, killer));
+                    return new DeathMessage(timestamp, receiver, fullMessage, player.uuid,
+                            new Death(server.serverInfo, timestamp, Death.Type.GENERIC, killer == null ? null : killer.uuid));
                 }
 
                 return new CommandMessage(timestamp, receiver, fullMessage);
@@ -430,11 +427,11 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                         case "yellow": { // Can still get yellow join/leave messages when the server reboots
                             Matcher matcher = joinLeavePattern.matcher(first.get("text").getAsString());
                             if (matcher.matches()) {
-                                PlayerInfo info = getByName(matcher.group("player"));
+                                PlayerInfo info = yesCom.playersHandler.getInfo(matcher.group("player"));
                                 boolean joined = matcher.group("action").equals("joined");
 
                                 if (info != null || !joined) {
-                                    return new JoinLeaveMessage(timestamp, receiver, fullMessage, info, joined);
+                                    return new JoinLeaveMessage(timestamp, receiver, fullMessage, info.uuid, joined);
                                 } else {
                                     // We're gonna get this before we get the tab list item, which sucks because it means
                                     // that we won't have cached the player's info yet, meaning getByName will return null
@@ -459,8 +456,8 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                             message.add("extra", extra);
 
                             return new WhisperMessage(
-                                    timestamp, receiver, fullMessage, getByName(matcher.group("player")), true,
-                                    matcher.group("message") + MinecraftChat.unwrap(message, Collections.emptyMap())
+                                    timestamp, receiver, fullMessage, yesCom.playersHandler.getInfo(matcher.group("player")).uuid,
+                                    true, matcher.group("message") + MinecraftChat.unwrap(message, Collections.emptyMap())
                             );
                         }
 
@@ -471,8 +468,8 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                             message.add("extra", extra);
 
                             return new WhisperMessage(
-                                    timestamp, receiver, fullMessage, getByName(matcher.group("player")), false,
-                                    matcher.group("message") + MinecraftChat.unwrap(message, Collections.emptyMap())
+                                    timestamp, receiver, fullMessage, yesCom.playersHandler.getInfo(matcher.group("player")).uuid,
+                                    false, matcher.group("message") + MinecraftChat.unwrap(message, Collections.emptyMap())
                             );
                         }
                         break;
@@ -487,7 +484,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                                 message.add("extra", extra);
 
                                 return new PartyMessage(
-                                        timestamp, receiver, fullMessage, getByName(matcher.group("player")),
+                                        timestamp, receiver, fullMessage, yesCom.playersHandler.getInfo(matcher.group("player")).uuid,
                                         matcher.group("message") + MinecraftChat.unwrap(message, Collections.emptyMap())
                                 );
                             }
@@ -502,7 +499,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
                             message.add("extra", extra);
 
                             return new RegularMessage(
-                                    timestamp, receiver, fullMessage, getByName(matcher.group("player")),
+                                    timestamp, receiver, fullMessage, yesCom.playersHandler.getInfo(matcher.group("player")).uuid,
                                     matcher.group("message") + MinecraftChat.unwrap(message, Collections.emptyMap())
                             );
                         }

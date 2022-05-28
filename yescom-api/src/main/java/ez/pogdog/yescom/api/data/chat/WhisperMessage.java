@@ -11,11 +11,11 @@ import java.util.UUID;
  */
 public class WhisperMessage extends ChatMessage {
 
-    public final PlayerInfo recipient;
+    public final UUID recipient;
     public final boolean sending;
     public final String actualMessage;
 
-    public WhisperMessage(long timestamp, UUID receiver, String message, PlayerInfo recipient, boolean sending, String actualMessage) {
+    public WhisperMessage(long timestamp, UUID receiver, String message, UUID recipient, boolean sending, String actualMessage) {
         super(timestamp, receiver, message);
 
         this.recipient = recipient;

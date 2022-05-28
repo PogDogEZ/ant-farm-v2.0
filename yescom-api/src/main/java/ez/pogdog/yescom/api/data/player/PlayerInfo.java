@@ -17,11 +17,12 @@ import java.util.UUID;
  */
 public final class PlayerInfo implements Cloneable {
 
-    public final List<Server> servers = new ArrayList<>();
+    public final List<ServerInfo> servers = new ArrayList<>();
     public final Set<Session> sessions = new HashSet<>();
     public final Set<Death> deaths = new HashSet<>();
     public final Set<Kill> kills = new HashSet<>();
 
+    public final int lookupID;
     public final UUID uuid;
     public final long firstSeen;
 
@@ -30,13 +31,15 @@ public final class PlayerInfo implements Cloneable {
     public int ping = 0;
     public GameMode gameMode = GameMode.SURVIVAL;
 
-    public PlayerInfo(UUID uuid, long firstSeen, String username) {
+    public PlayerInfo(int lookupID, UUID uuid, long firstSeen, String username) {
+        this.lookupID = lookupID;
         this.uuid = uuid;
         this.firstSeen = firstSeen;
         this.username = username;
     }
 
-    public PlayerInfo(UUID uuid, long firstSeen) {
+    public PlayerInfo(int lookupID, UUID uuid, long firstSeen) {
+        this.lookupID = lookupID;
         this.uuid = uuid;
         this.firstSeen = firstSeen;
     }
@@ -84,12 +87,12 @@ public final class PlayerInfo implements Cloneable {
         SPECTATOR;
     }
 
-    public static class Server {
+    public static class ServerInfo {
 
         public final String hostname;
         public final int port;
 
-        public Server(String hostname, int port) {
+        public ServerInfo(String hostname, int port) {
             this.hostname = hostname;
             this.port = port;
         }
@@ -98,7 +101,7 @@ public final class PlayerInfo implements Cloneable {
         public boolean equals(Object other) {
             if (this == other) return true;
             if (other == null || getClass() != other.getClass()) return false;
-            Server server = (Server)other;
+            ServerInfo server = (ServerInfo)other;
             return port == server.port && hostname.equals(server.hostname);
         }
 

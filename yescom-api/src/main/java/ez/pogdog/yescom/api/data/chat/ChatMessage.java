@@ -31,12 +31,12 @@ public abstract class ChatMessage {
         if (this == other) return true;
         if (other == null || getClass() != other.getClass()) return false;
         ChatMessage that = (ChatMessage)other;
-        return timestamp == that.timestamp && message.equals(that.message);
+        return timestamp == that.timestamp && receiver.equals(that.receiver) && message.equals(that.message);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, message);
+        return Objects.hash(timestamp, receiver, message);
     }
 
     @Override

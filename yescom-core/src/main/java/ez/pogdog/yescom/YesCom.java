@@ -265,6 +265,12 @@ public class YesCom extends Thread implements IConfig {
         running = false;
 
         for (Server server : servers) server.disconnectAll("Shutting down");
+        try {
+            dataHandler.saveDatabase(true);
+        } catch (IOException error) {
+            logger.warning("Couldn't forcefully save database: " + error.getMessage());
+            logger.throwing(getClass().getSimpleName(), "shutdown", error);
+        }
     }
 
     /* ------------------------------ Setters and getters ------------------------------ */

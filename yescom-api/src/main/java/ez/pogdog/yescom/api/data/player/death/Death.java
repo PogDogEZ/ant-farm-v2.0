@@ -5,25 +5,26 @@ import ez.pogdog.yescom.api.data.player.PlayerInfo;
 
 import java.util.Date;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * When a {@link PlayerInfo} dies.
  */
 public class Death {
 
-    public final PlayerInfo.Server server;
+    public final PlayerInfo.ServerInfo server;
     public final long timestamp;
     public final Type type;
-    public final PlayerInfo killer;
+    public final UUID killer;
 
-    public Death(PlayerInfo.Server server, long timestamp, Type type, PlayerInfo killer) {
+    public Death(PlayerInfo.ServerInfo server, long timestamp, Type type, UUID killer) {
         this.server = server;
         this.timestamp = timestamp;
         this.type = type;
         this.killer = killer;
     }
 
-    public Death(PlayerInfo.Server server, long timestamp, Type type) {
+    public Death(PlayerInfo.ServerInfo server, long timestamp, Type type) {
         this(server, timestamp, type, null);
     }
 
@@ -37,7 +38,7 @@ public class Death {
 
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, killer, type);
+        return Objects.hash(server, timestamp, killer, type);
     }
 
     @Override

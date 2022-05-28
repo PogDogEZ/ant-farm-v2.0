@@ -18,6 +18,7 @@ import ez.pogdog.yescom.api.data.player.PlayerInfo;
 import ez.pogdog.yescom.api.data.chat.ChatMessage;
 import ez.pogdog.yescom.api.data.player.Session;
 import ez.pogdog.yescom.api.data.player.death.Death;
+import ez.pogdog.yescom.api.data.player.death.Kill;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.ITickable;
 import ez.pogdog.yescom.core.account.IAccount;
@@ -30,17 +31,16 @@ import ez.pogdog.yescom.core.report.connection.HighTSLPReport;
 import ez.pogdog.yescom.core.servers.IServerBehaviour;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
@@ -111,7 +111,7 @@ public class Server implements IConfig, ITickable {
     public final String hostname;
     public final int port;
 
-    public final PlayerInfo.Server serverInfo;
+    public final PlayerInfo.ServerInfo serverInfo;
 
     // Direct references for ease, it's hacky but who cares
     public final InvalidMoveHandle overworldInvalidMoveHandle;
@@ -120,7 +120,10 @@ public class Server implements IConfig, ITickable {
 
     private final Map<UUID, Long> onlinePlayers = new HashMap<>();
     private final List<Player> players = new CopyOnWriteArrayList<>();
-    private final Queue<ChatMessage> chatMessages = new ArrayDeque<>();
+    // private final Queue<ChatMessage> chatMessages = new ArrayDeque<>();
+
+    // Need this as multiple players can report about the death at different times
+    private final Map<UUID, Long> recentDeaths = new ConcurrentHashMap<>();
 
     private boolean connected;
     private int renderDistance;
@@ -142,7 +145,7 @@ public class Server implements IConfig, ITickable {
         this.hostname = hostname;
         this.port = port;
 
-        serverInfo = new PlayerInfo.Server(hostname, port);
+        serverInfo = new PlayerInfo.ServerInfo(hostname, port);
 
         yesCom.tickables.add(this);
         yesCom.configHandler.addConfiguration(this);
@@ -305,8 +308,9 @@ public class Server implements IConfig, ITickable {
                     onlinePlayers.clear();
                 }
             }
-            tslp = 0;
+            recentDeaths.clear();
 
+            tslp = 0;
             connectionTime = System.currentTimeMillis();
         }
 
@@ -323,6 +327,10 @@ public class Server implements IConfig, ITickable {
         }
 
         if (!handles.isEmpty()) queriesPerSecond /= handles.size();
+
+        for (Map.Entry<UUID, Long> entry : recentDeaths.entrySet()) { // FIXME: Could lag mess with this?
+            if (System.currentTimeMillis() - entry.getValue() > 100) recentDeaths.remove(entry.getKey()); // Remove expired recent deaths
+        }
 
         if (System.currentTimeMillis() - lastStatsTime > 60000) {
             logger.finer(String.format("Server %s:%d stats: %d player(s), %d/%d queries, %.1f tps, %.1f ping, %.1f qps.",
@@ -524,12 +532,8 @@ public class Server implements IConfig, ITickable {
      * @param chatMessage The chat message to handle.
      */
     public void handleChatMessage(ChatMessage chatMessage) {
-        synchronized (chatMessages) {
-            if (!chatMessages.contains(chatMessage)) {
-                chatMessages.add(chatMessage);
-                Emitters.ON_PLAYER_CHAT.emit(chatMessage);
-            }
-        }
+        // No need to synchronise, we shouldn't see the same chat message twice from the same account
+        Emitters.ON_PLAYER_CHAT.emit(new Emitters.PlayerChat(this, chatMessage));
     }
 
     /**
@@ -539,11 +543,20 @@ public class Server implements IConfig, ITickable {
      */
     public void handleDeath(PlayerInfo player, Death death) {
         synchronized (onlinePlayers) {
-            if (!player.deaths.contains(death)) {
+            if (!player.deaths.contains(death) && !recentDeaths.containsKey(player.uuid)) {
+                recentDeaths.put(player.uuid, System.currentTimeMillis());
                 if (!player.servers.contains(serverInfo)) player.servers.add(serverInfo);
 
                 player.deaths.add(death);
                 Emitters.ON_ANY_PLAYER_DEATH.emit(new Emitters.OnlinePlayerDeath(player, this, death));
+
+                if (death.killer != null) {
+                    PlayerInfo killer = yesCom.playersHandler.getInfo(death.killer);
+                    if (!killer.servers.contains(serverInfo)) killer.servers.add(serverInfo);
+                    killer.kills.add(new Kill(serverInfo, death.timestamp, player.uuid));
+
+                    // No need to fire an event as it can be handled under the death event
+                }
             }
         }
     }

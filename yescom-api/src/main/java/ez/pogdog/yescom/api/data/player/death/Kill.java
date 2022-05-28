@@ -5,17 +5,18 @@ import ez.pogdog.yescom.api.data.player.PlayerInfo;
 
 import java.util.Date;
 import java.util.Objects;
+import java.util.UUID;
 
 /**
  * When a {@link PlayerInfo} kills another.
  */
 public class Kill {
 
-    public final PlayerInfo.Server server;
+    public final PlayerInfo.ServerInfo server;
     public final long timestamp;
-    public final PlayerInfo victim; // Lol can't really think of a better name for this field :p
+    public final UUID victim; // Lol can't really think of a better name for this field :p
 
-    public Kill(PlayerInfo.Server server, long timestamp, PlayerInfo victim) {
+    public Kill(PlayerInfo.ServerInfo server, long timestamp, UUID victim) {
         this.server = server;
         this.timestamp = timestamp;
         this.victim = victim;
@@ -31,7 +32,7 @@ public class Kill {
 
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, victim);
+        return Objects.hash(server, timestamp, victim);
     }
 
     @Override

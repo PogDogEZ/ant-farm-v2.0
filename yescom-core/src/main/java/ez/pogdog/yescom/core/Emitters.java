@@ -78,7 +78,7 @@ public class Emitters {
     /**
      * Fired when one of the players receives a chat message.
      */
-    public static final Emitter<ChatMessage> ON_PLAYER_CHAT = new Emitter<>(ChatMessage.class);
+    public static final Emitter<PlayerChat> ON_PLAYER_CHAT = new Emitter<>(PlayerChat.class);
 
     public static final Emitter<PlayerPacket> ON_PLAYER_PACKET_IN = new Emitter<>(PlayerPacket.class);
     public static final Emitter<PlayerPacket> ON_PLAYER_PACKET_OUT = new Emitter<>(PlayerPacket.class);
@@ -169,6 +169,17 @@ public class Emitters {
         public PlayerLogout(Player player, String reason) {
             this.player = player;
             this.reason = reason;
+        }
+    }
+
+    public static class PlayerChat {
+
+        public final Server server;
+        public final ChatMessage chatMessage;
+
+        public PlayerChat(Server server, ChatMessage chatMessage) {
+            this.server = server;
+            this.chatMessage = chatMessage;
         }
     }
 

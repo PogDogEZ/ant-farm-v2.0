@@ -11,10 +11,10 @@ import java.util.UUID;
  */
 public class RegularMessage extends ChatMessage {
 
-    public final PlayerInfo sender;
+    public final UUID sender;
     public final String actualMessage;
 
-    public RegularMessage(long timestamp, UUID receiver, String message, PlayerInfo sender, String actualMessage) {
+    public RegularMessage(long timestamp, UUID receiver, String message, UUID sender, String actualMessage) {
         super(timestamp, receiver, message);
 
         this.sender = sender;

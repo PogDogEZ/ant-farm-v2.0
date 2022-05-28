@@ -35,11 +35,13 @@ import com.github.steveice10.packetlib.packet.Packet;
 import com.github.steveice10.packetlib.tcp.TcpClientSession;
 import com.github.steveice10.packetlib.tcp.TcpSessionFactory;
 import ez.pogdog.yescom.YesCom;
+import ez.pogdog.yescom.api.Globals;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.Angle;
 import ez.pogdog.yescom.api.data.ChunkPosition;
 import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.api.data.Position;
+import ez.pogdog.yescom.api.data.chat.ChatMessage;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.ITickable;
 import ez.pogdog.yescom.core.account.IAccount;
@@ -49,7 +51,7 @@ import ez.pogdog.yescom.core.report.connection.ExtremeTPSReport;
 import ez.pogdog.yescom.core.report.player.DeadReport;
 import ez.pogdog.yescom.core.report.player.HealthLogoutReport;
 import ez.pogdog.yescom.core.report.player.VisualRangeLogoutReport;
-import ez.pogdog.yescom.core.util.Chat;
+import ez.pogdog.yescom.core.util.MinecraftChat;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -589,6 +591,8 @@ public class Player implements IConfig, ITickable {
                             packet.getX(), packet.getY(), packet.getY()));
                     Emitters.ON_REPORT.emit(new VisualRangeLogoutReport(Player.this, packet.getUUID()));
                     lastAutoLogoutTime = System.currentTimeMillis();
+
+                    // TODO: If other players are online, tracking is an option, etc...
 
                     if (DISABLE_AUTO_RECONNECT_ON_LOGOUT.value) {
                         logger.info(String.format("Auto reconnect disabled for %s.", getUsername()));

@@ -12,10 +12,10 @@ import java.util.UUID;
  */
 public class DeathMessage extends ChatMessage {
 
-    public final PlayerInfo player;
+    public final UUID player;
     public final Death death;
 
-    public DeathMessage(long timestamp, UUID receiver, String message, PlayerInfo player, Death death) {
+    public DeathMessage(long timestamp, UUID receiver, String message, UUID player, Death death) {
         super(timestamp, receiver, message);
 
         this.player = player;

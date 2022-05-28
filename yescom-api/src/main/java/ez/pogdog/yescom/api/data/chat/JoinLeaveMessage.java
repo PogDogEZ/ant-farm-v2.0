@@ -11,10 +11,10 @@ import java.util.UUID;
  */
 public class JoinLeaveMessage extends ChatMessage {
 
-    public final PlayerInfo player;
+    public final UUID player;
     public final boolean joining;
 
-    public JoinLeaveMessage(long timestamp, UUID receiver, String message, PlayerInfo player, boolean joining) {
+    public JoinLeaveMessage(long timestamp, UUID receiver, String message, UUID player, boolean joining) {
         super(timestamp, receiver, message);
 
         this.player = player;

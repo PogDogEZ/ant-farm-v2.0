@@ -30,7 +30,7 @@ import java.util.logging.Logger;
 /**
  * Handles stuff to do with players (trusted, UUID to name maps).
  */
-public class PlayersHandler implements IConfig, ISerialiser {
+public class PlayersHandler implements IConfig {
 
     private final Logger logger = Logging.getLogger("yescom.core.connection");
     private final YesCom yesCom = YesCom.getInstance();
@@ -51,12 +51,7 @@ public class PlayersHandler implements IConfig, ISerialiser {
             ))
     );
 
-    private final Map<UUID, PlayerInfo> playerCache = Collections.synchronizedMap(new ConcurrentHashMap<>());
-    private final Map<UUID, File> sessionFilesCache = new HashMap<>();
-
-    public PlayersHandler() {
-        yesCom.dataHandler.serialisers.add(this);
-    }
+    private final Map<UUID, PlayerInfo> playerCache = Collections.synchronizedMap(new HashMap<>());
 
     @Override
     public String getIdentifier() {
@@ -66,160 +61,6 @@ public class PlayersHandler implements IConfig, ISerialiser {
     @Override
     public IConfig getParent() {
         return YesCom.getInstance();
-    }
-
-    @Override
-    public void load(File dataDirectory) throws IOException {
-        loadPlayerCache(dataDirectory);
-        loadSessionFilesCache(dataDirectory);
-    }
-
-    @Override
-    public void save(File dataDirectory) throws IOException {
-        savePlayerCache(dataDirectory);
-
-        synchronized (sessionFilesCache) {
-            Set<PlayerInfo> dirty = new HashSet<>();
-            for (PlayerInfo info : playerCache.values()) {
-                if (!info.sessions.isEmpty()) dirty.add(info);
-            }
-            saveDirtySession(dataDirectory, dirty);
-            for (PlayerInfo info : dirty) info.sessions.clear(); // Servers don't take up enough space to care about
-            // saveSessionFilesCache(dataDirectory);
-        }
-    }
-
-    /* ------------------------------ Serialisation ------------------------------ */
-
-    /**
-     * Reads the basic player cache (UUID, username and skin URL) from the local database.
-     */
-    private void loadPlayerCache(File dataDirectory) throws IOException {
-        File playersFile = new File(dataDirectory, "players.bin");
-        if (!playersFile.exists() && !playersFile.createNewFile()) throw new IOException("Could not create players file.");
-
-        logger.finer("Reading player cache...");
-        long start = System.currentTimeMillis();
-        InputStream inputStream = new FileInputStream(playersFile);
-        int count = 0;
-        try {
-            count = Serial.Read.readInteger(inputStream);
-        } catch (EOFException ignored) { // First read will be empty if the file didn't exist
-        }
-        for (int index = 0; index < count; ++index) {
-            PlayerInfo info = Serial.Read.readPlayerInfo(inputStream);
-            playerCache.put(info.uuid, info);
-        }
-        inputStream.close();
-        logger.finer(String.format("Read %d player cache entries in %dms.", yesCom.playersHandler.getPlayerCache().size(),
-                System.currentTimeMillis() - start));
-    }
-
-    /**
-     * Saves the basic player cache (UUID, username and skin URL) to the local database.
-     */
-    private void savePlayerCache(File dataDirectory) throws IOException {
-        File playersFile = new File(dataDirectory, "players.bin");
-        if (!playersFile.exists() && !playersFile.createNewFile()) throw new IOException("Could not create players file.");
-
-        logger.finer("Writing player cache...");
-        long start = System.currentTimeMillis();
-        OutputStream outputStream = new FileOutputStream(playersFile);
-        Serial.Write.writeInteger(playerCache.size(), outputStream);
-        for (PlayerInfo info : playerCache.values()) Serial.Write.writePlayerInfo(info, outputStream);
-        outputStream.close();
-        logger.finer(String.format("Wrote %d player cache entries in %dms.", playerCache.size(),
-                System.currentTimeMillis() - start));
-    }
-
-    private void loadSessionFilesCache(File dataDirectory) throws IOException {
-        File sessionsDirectory = new File(dataDirectory, "sessions");
-        if (!sessionsDirectory.exists() && !sessionsDirectory.mkdirs())
-            throw new IOException("Could not create sessions directory.");
-
-        logger.finer("Indexing player sessions cache...");
-        File[] files = sessionsDirectory.listFiles();
-        if (files == null) throw new IOException("Session directory file listing is null.");
-
-        long start = System.currentTimeMillis();
-        for (File file : files) {
-            if (file.isDirectory()) continue; // Skip obvious junk
-
-            try {
-                // Skipping the session data, for time saving, would be annoying and probably wouldn't save *that much*
-                // time, so we'll just read it fully, sorry lol
-                for (PlayerInfo info : readSessionFile(file, Collections.emptyMap())) sessionFilesCache.put(info.uuid, file);
-
-            } catch (IOException error) {
-                logger.warning(String.format("Session file %s might be corrupt: %s", file, error));
-                logger.throwing(getClass().getSimpleName(), "loadSessionFilesCache", error);
-            }
-        }
-        logger.finer(String.format("Indexed %d sessions from %d files in %dms.", sessionFilesCache.size(), files.length,
-                System.currentTimeMillis() - start));
-    }
-
-    /**
-     * Reads a single session file and returns the {@link PlayerInfo} stubs from it.
-     */
-    private List<PlayerInfo> readSessionFile(File file, Map<UUID, PlayerInfo> infos) throws IOException {
-        List<PlayerInfo> stubs = new ArrayList<>();
-
-        InputStream inputStream = new FileInputStream(file);
-        int count = Serial.Read.readInteger(inputStream);
-        for (int index = 0; index < count; ++index) stubs.add(Serial.Read.readSessions(inputStream, infos));
-        inputStream.close();
-
-        return stubs;
-    }
-
-    private void saveDirtySession(File dataDirectory, Set<PlayerInfo> infos) throws IOException {
-        File sessionsDirectory = new File(dataDirectory, "sessions");
-        if (!sessionsDirectory.exists() && !sessionsDirectory.mkdirs())
-            throw new IOException("Could not create sessions directory.");
-
-        logger.finer(String.format("Writing %d dirty session infos...", infos.size()));
-        long start = System.currentTimeMillis();
-
-        Map<UUID, PlayerInfo> newlySaved = new HashMap<>();
-        Map<File, Map<UUID, PlayerInfo>> toOverwrite = new HashMap<>();
-
-        for (PlayerInfo info : infos) {
-            if (sessionFilesCache.containsKey(info.uuid)) {
-                toOverwrite.computeIfAbsent(sessionFilesCache.get(info.uuid), file -> new HashMap<>()).put(info.uuid, info);
-            } else {
-                newlySaved.put(info.uuid, info);
-            }
-        }
-
-        if (!newlySaved.isEmpty()) {
-            for (int index = 0; index < 1000; ++index) {
-                File newFile = new File(sessionsDirectory, String.format("%x.bin", Math.abs(newlySaved.hashCode() + index)));
-                if (!newFile.exists()) {
-                    writeSessionFile(newFile, new ArrayList<>(newlySaved.values()));
-                    for (UUID uuid : newlySaved.keySet()) sessionFilesCache.put(uuid, newFile);
-                    break;
-                }
-            }
-        }
-
-        for (Map.Entry<File, Map<UUID, PlayerInfo>> entry : toOverwrite.entrySet()) {
-            List<PlayerInfo> stubs = readSessionFile(entry.getKey(), entry.getValue());
-            writeSessionFile(entry.getKey(), stubs);
-        }
-
-        logger.finer(String.format("Wrote %d infos with dirty sessions into %d files in %dms.", infos.size(),
-                toOverwrite.size() + (newlySaved.isEmpty() ? 0 : 1), System.currentTimeMillis() - start));
-    }
-
-    private void writeSessionFile(File sessionFile, List<PlayerInfo> stubs) throws IOException {
-        if (!sessionFile.exists() && !sessionFile.createNewFile())
-            throw new IOException(String.format("Could not create new session file %s.", sessionFile));
-
-        OutputStream outputStream = new FileOutputStream(sessionFile);
-        Serial.Write.writeInteger(stubs.size(), outputStream);
-        for (PlayerInfo info : stubs) Serial.Write.writeSessions(info, outputStream);
-        outputStream.close();
     }
 
     /* ------------------------------ Public API ------------------------------ */
@@ -264,7 +105,7 @@ public class PlayersHandler implements IConfig, ISerialiser {
         PlayerInfo info = playerCache.get(uuid);
         boolean newCache = info == null;
         if (newCache) {
-            info = new PlayerInfo(uuid, System.currentTimeMillis());
+            info = new PlayerInfo(playerCache.size(), uuid, System.currentTimeMillis());
             playerCache.put(uuid, info);
         }
 
@@ -282,26 +123,27 @@ public class PlayersHandler implements IConfig, ISerialiser {
         return getInfo(uuid, null, null, -1, null);
     }
 
+    public PlayerInfo getInfo(int lookupID) {
+        for (PlayerInfo info : playerCache.values()) {
+            if (info.lookupID == lookupID) return info;
+        }
+        return null;
+    }
+
+    public PlayerInfo getInfo(String username) {
+        for (PlayerInfo info : playerCache.values()) {
+            if (info.username.equalsIgnoreCase(username)) return info;
+        }
+        return null;
+    }
+
     /**
      * Gets the recorded sessions for a given player.
      * @param info The player info.
      * @return The recorded sessions.
      */
     public Set<Session> getSessions(PlayerInfo info) {
-        if (!sessionFilesCache.containsKey(info.uuid)) return Collections.emptySet();
-
-        synchronized (sessionFilesCache) {
-            try {
-                // Should read the data into the provided info
-                readSessionFile(sessionFilesCache.get(info.uuid), Collections.singletonMap(info.uuid, info));
-                return new HashSet<>(info.sessions); // Copy this so we don't clear it
-
-            } catch (IOException error) {
-                logger.warning(String.format("Couldn't read session data for %s: %s", info.uuid, error.getMessage()));
-                logger.throwing(getClass().getSimpleName(), "getSessions", error);
-                return Collections.emptySet();
-            }
-        }
+        return yesCom.dataHandler.players.getSessions(info);
     }
 
     /**
@@ -310,7 +152,16 @@ public class PlayersHandler implements IConfig, ISerialiser {
      * @return The recorded sessions.
      */
     public Set<Session> getSessions(UUID uuid) {
-        return getSessions(playerCache.get(uuid));
+        return yesCom.dataHandler.players.getSessions(playerCache.get(uuid));
+    }
+
+    /**
+     * @return The unique (to this database) lookup ID of a given UUID.
+     */
+    public int getLookupID(UUID uuid) {
+        PlayerInfo info = playerCache.get(uuid);
+        if (info == null) return -1;
+        return info.lookupID;
     }
 
     /**
