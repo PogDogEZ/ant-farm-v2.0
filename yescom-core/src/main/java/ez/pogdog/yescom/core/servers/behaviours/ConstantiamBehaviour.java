@@ -91,7 +91,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) forgot to turn on NoFall$"), Death.Type.FALLING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) hit the ground too hard$"), Death.Type.FALLING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) fell out of the water$"), Death.Type.FALLING);
-        deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) fell of Trump's wall$"), Death.Type.FALLING);
+        deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) fell off Trump's wall$"), Death.Type.FALLING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) was testing gravity$"), Death.Type.FALLING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) fell off some vines$"), Death.Type.FALLING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) forgot how to fly$"), Death.Type.FALLING);
@@ -127,6 +127,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20})'s hunger strike gained them nothing$"), Death.Type.STARVING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) forgot their melons$"), Death.Type.STARVING);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) moved to Ethiopia$"), Death.Type.STARVING);
+        deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) starved to death$"), Death.Type.STARVING);
 
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) got head from a wither$"), Death.Type.WITHER);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) took 3 heads at once$"), Death.Type.WITHER); // TODO: Check
@@ -154,6 +155,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) never saw (?<killer>[A-Za-z0-9_]{1,20}) coming$"), Death.Type.MELEE);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) had a date with (?<killer>[A-Za-z0-9_]{1,20})'s .+"), Death.Type.MELEE);
         deathMessages.put(Pattern.compile("^(?<killer>[A-Za-z0-9_]{1,20}) threw (?<player>[A-Za-z0-9_]{1,20}) to their death$"), Death.Type.MELEE);
+        deathMessages.put(Pattern.compile("^ (?<player>[A-Za-z0-9_]{1,20}) was slain by (?<killer>[A-Za-z0-9_]{1,20})"), Death.Type.MELEE);
 
         yesCom.configHandler.addConfiguration(this);
     }

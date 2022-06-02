@@ -2,6 +2,10 @@ package ez.pogdog.yescom.core.data;
 
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
+import ez.pogdog.yescom.api.data.player.PlayerInfo;
+import ez.pogdog.yescom.api.data.player.Session;
+import ez.pogdog.yescom.api.data.player.death.Death;
+import ez.pogdog.yescom.api.data.player.death.Kill;
 import ez.pogdog.yescom.core.ITickable;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.data.serialisers.PlayerSerialiser;
@@ -11,6 +15,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
@@ -106,5 +112,59 @@ public class DataHandler implements IConfig, ITickable {
                 logger.throwing(getClass().getSimpleName(), "saveDatabase", error);
             }
         }
+    }
+
+    /**
+     * Gets the recorded sessions for a given player.
+     * @param info The player info.
+     * @return The recorded sessions.
+     */
+    public Set<Session> getSessions(PlayerInfo info) {
+        return players.getSessions(info);
+    }
+
+    /**
+     * Gets the recorded sessions for a given player.
+     * @param uuid The UUID of the player.
+     * @return The recorded sessions.
+     */
+    public Set<Session> getSessions(UUID uuid) {
+        return players.getSessions(yesCom.playersHandler.getInfo(uuid));
+    }
+
+    /**
+     * Gets the recorded deaths for a given player.
+     * @param info The player info.
+     * @return The recorded deaths.
+     */
+    public Set<Death> getDeaths(PlayerInfo info) {
+        return players.getDeaths(info);
+    }
+
+    /**
+     * Gets the recorded deaths for a given player.
+     * @param uuid The UUID of the player.
+     * @return The recorded deaths.
+     */
+    public Set<Death> getDeaths(UUID uuid) {
+        return players.getDeaths(yesCom.playersHandler.getInfo(uuid));
+    }
+
+    /**
+     * Gets the recorded kills for a given player.
+     * @param info The player info.
+     * @return The recorded kills.
+     */
+    public Set<Kill> getKills(PlayerInfo info) {
+        return players.getKills(info);
+    }
+
+    /**
+     * Gets the recorded kills for a given player.
+     * @param uuid The UUID of the player.
+     * @return The recorded kills.
+     */
+    public Set<Kill> getKills(UUID uuid) {
+        return players.getKills(yesCom.playersHandler.getInfo(uuid));
     }
 }

@@ -100,7 +100,7 @@ class SkinDownloaderThread(QThread):
                                 self._cache[uuid] = (int(time.time()) + 1800, player_head)
                                 self._cache_mutex.unlock()
 
-                                self.skin_resolved.emit((uuid, QIcon(player_head)))
+                                self.skin_resolved.emit((uuid, player_head))
                                 del player_skin
                                 del self._requests[uuid]
 
@@ -154,7 +154,7 @@ class SkinDownloaderThread(QThread):
             expiry, player_head = self._cache[uuid]
             self._cache[uuid] = (expiry + 1800, player_head)
             self._cache_mutex.unlock()
-            self.skin_resolved.emit((uuid, QIcon(player_head)))
+            self.skin_resolved.emit((uuid, player_head))
             return
         self._cache_mutex.unlock()
 

@@ -1,4 +1,5 @@
 apply plugin: "java"
+apply plugin: "ru.vyarus.use-python"
 apply plugin: "com.github.johnrengelman.shadow"
 
 jar.enabled = false
@@ -19,15 +20,19 @@ dependencies {
     compile group: "black.ninia", name: "jep", version: "4.0.3"
 }
 
+processResources {
+    from "${buildDir}/lib" // Built Python libraries
+}
+
 shadowJar {
     manifest {
         attributes("Main-Class": "ez.pogdog.yescom.ui.Main")
     }
     // duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
-    from sourceSets.main.java.srcDirs.collect {
-        it.toString().contains("python") ? it : null
-    }
+    // from file("${buildDir}/dist").collect {
+    //     zipTree(it)
+    // }
     configurations = [project.configurations.compileClasspath]
     /*
     dependencies {
@@ -46,4 +51,19 @@ shadowJar {
     classifier = "ui"
 }
 
+task compilePython(type: PythonTask) {
+    command = "setup.py"
+    extraArgs = [
+            "build_py",
+            "--build-lib", "${buildDir}/lib",
+            "--compile",
+            "-O2",
+            "--force",
+            "build_ext",
+            "--build-lib", "${buildDir}/lib",
+            "--force",
+    ]
+}
+
+processResources.dependsOn(compilePython)
 build.dependsOn(shadowJar)

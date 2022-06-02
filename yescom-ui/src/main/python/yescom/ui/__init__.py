@@ -11,6 +11,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
 from .main import MainWindow
+from .resources import Resources
 from .. import emitters  # Localise emitters
 
 from ez.pogdog.yescom import YesCom
@@ -57,12 +58,8 @@ def _initialise(args: List[str], init_loop: QEventLoop) -> None:
 def main(args: List[str], jar_path: str) -> None:
     logger.info("Python UI component loaded.")
 
-    temp_extract = os.path.join(tempfile.gettempdir(), "yescom_splash.gif")  # FUCK QT
-    logger.fine("Loading splash gif from %r..." % jar_path)
-    zipfile = ZipFile(jar_path)
-    with open(temp_extract, "wb") as fileobj:
-        fileobj.write(zipfile.read("yescom_splash.gif"))
-    zipfile.close()
+    resources = Resources(jar_path)
+    splash_gif = resources.extract("yescom_splash.gif")  # FUCK QT
 
     preferred_style = "Fusion"
     logger.fine("Current styles: %r." % QStyleFactory.keys())
@@ -75,7 +72,7 @@ def main(args: List[str], jar_path: str) -> None:
 
     screen = QApplication.desktop().screen()
 
-    splash_screen = SplashScreen(int(screen.width() / 2), int(screen.height() / 2), temp_extract)
+    splash_screen = SplashScreen(int(screen.width() / 2), int(screen.height() / 2), splash_gif)
     splash_screen.show()
     app.processEvents()
 
@@ -84,7 +81,7 @@ def main(args: List[str], jar_path: str) -> None:
     init_loop.exec()
 
     splash_screen.movie.stop()
-    os.remove(temp_extract)
+    os.remove(splash_gif)  # Clean up early
 
     main_window = MainWindow()
     main_window.resize(int(screen.width() / 2), int(screen.height() / 2))

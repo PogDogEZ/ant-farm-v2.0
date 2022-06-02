@@ -2,8 +2,10 @@ allprojects {
     buildscript {
         repositories {
             gradlePluginPortal()
+            mavenCentral()
         }
         dependencies {
+            classpath group: "ru.vyarus", name: "gradle-use-python-plugin", version: "2.3.0"
             classpath group: "com.github.jengelman.gradle.plugins", name: "shadow", version: "6.1.0"
         }
     }

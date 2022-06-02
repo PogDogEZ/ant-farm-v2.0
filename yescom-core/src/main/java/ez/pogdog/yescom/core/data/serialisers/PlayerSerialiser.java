@@ -278,7 +278,7 @@ public class PlayerSerialiser implements ISerialiser, ITickable {
     /* ------------------------------ Public API ------------------------------ */
 
     /**
-     * Gets the sessions from disk, for the given UUID.
+     * Gets the sessions from disk, for the given {@link PlayerInfo}.
      * @param info The player to look up.
      * @return The sessions.
      */
@@ -288,11 +288,13 @@ public class PlayerSerialiser implements ISerialiser, ITickable {
         //     cache.lastAccessTime = System.currentTimeMillis();
         //     return cache.sessions;
         // }
+        Set<Session> sessions = new HashSet<>();
+        if (!info.sessions.isEmpty()) sessions.addAll(info.sessions); // Any dirty sessions
 
         for (AbstractFile<Session> sessionsFile : sessionsFiles) {
             if (sessionsFile.offsets.containsKey(info.lookupID)) {
                 try {
-                    Set<Session> sessions = sessionsFile.readFor(info.lookupID);
+                    sessions.addAll(sessionsFile.readFor(info.lookupID));
                     // sessionsCache.put(uuid, new SessionsCache(sessions));
                     return sessions;
 
@@ -304,7 +306,58 @@ public class PlayerSerialiser implements ISerialiser, ITickable {
                 }
             }
         }
-        return Collections.emptySet();
+
+        return sessions;
+    }
+
+    /**
+     * Gets the deaths from disk, for the given {@link PlayerInfo}.
+     * @param info The player to look up.
+     * @return The deaths.
+     */
+    public synchronized Set<Death> getDeaths(PlayerInfo info) {
+        Set<Death> deaths = new HashSet<>();
+        if (!info.deaths.isEmpty()) deaths.addAll(info.deaths);
+
+        for (AbstractFile<Death> deathsFile : deathsFiles) {
+            if (deathsFile.offsets.containsKey(info.lookupID)) {
+                try {
+                    deaths.addAll(deathsFile.readFor(info.lookupID));
+                    return deaths;
+                } catch (IOException error) {
+                    logger.warning(String.format("Failed to read deaths from file %s for %s: %s", deathsFile.file,
+                            info, error));
+                    logger.throwing(getClass().getSimpleName(), "getDeaths", error);
+                }
+            }
+        }
+
+        return deaths;
+    }
+
+    /**
+     * Gets the kills from disk, for the given {@link PlayerInfo}.
+     * @param info The player to look up.
+     * @return The kills.
+     */
+    public synchronized Set<Kill> getKills(PlayerInfo info) {
+        Set<Kill> kills = new HashSet<>();
+        if (!info.kills.isEmpty()) kills.addAll(info.kills);
+
+        for (AbstractFile<Kill> killsFile : killsFiles) {
+            if (killsFile.offsets.containsKey(info.lookupID)) {
+                try {
+                    kills.addAll(killsFile.readFor(info.lookupID));
+                    return kills;
+                } catch (IOException error) {
+                    logger.warning(String.format("Failed to read kills from file %s for %s: %s", killsFile.file,
+                            info, error));
+                    logger.throwing(getClass().getSimpleName(), "getKills", error);
+                }
+            }
+        }
+
+        return kills;
     }
 
     /* ------------------------------ Classes ------------------------------ */

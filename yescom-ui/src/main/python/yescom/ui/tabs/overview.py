@@ -115,10 +115,6 @@ class OverviewTab(QWidget):
 
         online_layout = QVBoxLayout()
 
-        self.online_players_label = QLabel(self)
-        self.online_players_label.setText("Online players (0):")
-        online_layout.addWidget(self.online_players_label)
-
         self.online_players_tree = OverviewTab.OnlinePlayersTree(self)
         online_layout.addWidget(self.online_players_tree)
 
@@ -190,7 +186,7 @@ class OverviewTab(QWidget):
         if self.main_window.current_server is not None:
             count = len(self.main_window.current_server.getOnlinePlayers())
 
-        self.online_players_label.setText("Online players (%i):" % count)
+        self.online_players_tree.setHeaderLabels(["Online players (%i):" % count, ""])
         self.disconnect_all_button.setEnabled(
             self.main_window.current_server is not None and self.main_window.current_server.isConnected()
         )
@@ -227,12 +223,14 @@ class OverviewTab(QWidget):
 
             self.dirty = False
 
-            self.setHeaderHidden(True)
             self.setColumnCount(2)
+            self.setHeaderLabels(["Online players (0):", ""])
 
             self.itemChanged.connect(lambda item: self._set_dirty())
 
             self.main_window.tick.connect(self._on_tick)
+
+            self.resizeColumnToContents(0)
 
         # ------------------------------ Events ------------------------------ #
 
@@ -345,7 +343,7 @@ class OverviewTab(QWidget):
             self.addChild(known_child)
 
             self.trusted_child = QTreeWidgetItem(self, ["Trusted:"])
-            self.trusted_child.setToolTip(0, "Is this a player that we trust?")
+            self.trusted_child.setToolTip(0, "Is this a player that we trust? If so, they are exempt from certain checks.")
             self.addChild(self.trusted_child)
             self._on_trust_state_changed(info)
 
@@ -386,9 +384,9 @@ class OverviewTab(QWidget):
 
         # ------------------------------ Events ------------------------------ #
 
-        def _on_skin_resolved(self, resolved: Tuple[UUID, QIcon]) -> None:
+        def _on_skin_resolved(self, resolved: Tuple[UUID, QPixmap]) -> None:
             if resolved[0] == self.info.uuid:
-                self.setIcon(0, resolved[1])
+                self.setIcon(0, QIcon(resolved[1]))
 
         def _on_tick(self) -> None:
             current = self.main_window.current_server

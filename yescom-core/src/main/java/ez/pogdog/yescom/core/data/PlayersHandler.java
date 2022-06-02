@@ -138,24 +138,6 @@ public class PlayersHandler implements IConfig {
     }
 
     /**
-     * Gets the recorded sessions for a given player.
-     * @param info The player info.
-     * @return The recorded sessions.
-     */
-    public Set<Session> getSessions(PlayerInfo info) {
-        return yesCom.dataHandler.players.getSessions(info);
-    }
-
-    /**
-     * Gets the recorded sessions for a given player.
-     * @param uuid The UUID of the player.
-     * @return The recorded sessions.
-     */
-    public Set<Session> getSessions(UUID uuid) {
-        return yesCom.dataHandler.players.getSessions(playerCache.get(uuid));
-    }
-
-    /**
      * @return The unique (to this database) lookup ID of a given UUID.
      */
     public int getLookupID(UUID uuid) {

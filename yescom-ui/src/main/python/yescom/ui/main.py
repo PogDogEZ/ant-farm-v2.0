@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from typing import Union
+import os
+from typing import Dict, List, Tuple, Union
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -15,6 +16,55 @@ from ez.pogdog.yescom.api import Logging
 from ez.pogdog.yescom.core.connection import Server
 
 logger = Logging.getLogger("yescom.ui.window")
+
+
+def get_font_paths() -> Tuple[List[str], Dict[str, str], List[str]]:
+    """
+    Returns the paths of the fonts installed on the system.
+    https://stackoverflow.com/questions/19098440/how-to-get-the-font-file-path-with-qfont-in-qt
+
+    :return: Unloadable fonts, a dictionary of the fonts and their names, and the paths of the fonts.
+    """
+
+    font_paths = QStandardPaths.standardLocations(QStandardPaths.FontsLocation)
+
+    accounted = []
+    unloadable = []
+    family_to_path = {}
+
+    def find_fonts(path: str) -> None:
+        for file in os.listdir(path):
+            file = os.path.join(path, file)
+
+            if os.path.isdir(file):
+                find_fonts(file)
+
+            elif os.path.splitext(file)[1].lower() in (".ttf", ".otf"):
+                idx = db.addApplicationFont(file)  # Add font path
+
+                if idx < 0:
+                    unloadable.append(file)  # Font wasn't loaded if idx is -1
+                else:
+                    names = db.applicationFontFamilies(idx)  # Load back font family name
+
+                    for name in names:
+                        if name in family_to_path:
+                            accounted.append((name, file))
+                        else:
+                            family_to_path[name] = file
+
+                    # This isn't a 1:1 mapping, for example
+                    # 'C:/Windows/Fonts/HTOWERT.TTF' (regular) and
+                    # 'C:/Windows/Fonts/HTOWERTI.TTF' (italic) are different
+                    # but applicationFontFamilies will return 'High Tower Text' for both
+
+    db = QFontDatabase()
+    for font_path in font_paths:  # Go through all font paths
+        if os.path.exists(font_path):
+            find_fonts(font_path)  # Go through all files at each path
+
+    # noinspection PyTypeChecker
+    return unloadable, family_to_path, accounted
 
 
 class MainWindow(QMainWindow):
@@ -80,6 +130,9 @@ class MainWindow(QMainWindow):
         self.yescom = YesCom.getInstance()
 
         self.setWindowTitle("YesCom \ud83d\ude08")
+
+        logger.fine("Locating fonts...")
+        self.unloadable, self.families, self.accounted = get_font_paths()
 
         logger.fine("Starting event queue thread...")
         self.event_thread = EventQueueThread(self)
@@ -174,17 +227,17 @@ class MainWindow(QMainWindow):
 
         layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
 
-        self.servers_box = QComboBox(self.central_widget)
+        self.servers_combo_box = QComboBox(self.central_widget)
 
         if self.yescom.servers:
             self.current_server = self.yescom.servers[0]
             for server in self.yescom.servers:
-                self.servers_box.addItem("%s" % server.hostname)
+                self.servers_combo_box.addItem("%s" % server.hostname, server)
 
-        self.servers_box.insertSeparator(self.servers_box.count())
-        self.servers_box.addItem("Add new server...")
-        self.servers_box.currentTextChanged.connect(self._server_changed)
-        layout.addWidget(self.servers_box)
+        self.servers_combo_box.insertSeparator(self.servers_combo_box.count())
+        self.servers_combo_box.addItem("Add new server...")
+        self.servers_combo_box.currentIndexChanged.connect(self._on_server_changed)
+        layout.addWidget(self.servers_combo_box)
 
         layout.setStretch(1, 3)
         layout.setStretch(2, 1)
@@ -223,21 +276,15 @@ class MainWindow(QMainWindow):
 
     # ------------------------------ Events ------------------------------ #
 
-    def _server_changed(self, text: str) -> None:
-        if not text:
-            return
-
-        if text == "Add new server...":  # There's prolly a better way of doing this, I just don't care
+    def _on_server_changed(self, index: int) -> None:
+        if self.servers_combo_box.currentData() is None:
             # TODO: Implement
             self.current_server = None
-            self.servers_box.setCurrentIndex(-1)
+            self.servers_combo_box.setCurrentIndex(-1)
             return
         else:
-            for server in self.yescom.servers:
-                if text == server.hostname:
-                    self.current_server = server
-                    logger.fine("Current server: %s" % self._current_server)
-                    return
+            self.current_server = self.servers_combo_box.currentData()
+            logger.fine("Current server: %s" % self._current_server)
 
     # ------------------------------ Public methods ------------------------------ #
 
@@ -263,14 +310,19 @@ class MainWindow(QMainWindow):
         Disconnects all online players, but warns before doing so.
         """
 
-        if self.current_server is None:
+        if self._current_server is None or not self._current_server.isConnected():
             return
+
+        online = 0
+        for player in self._current_server.getPlayers():
+            if player.isConnected():
+                online += 1
 
         message_box = QMessageBox(self)
         message_box.setIcon(QMessageBox.Warning)
         message_box.setWindowTitle("Disconnect all")
-        message_box.setText("This will disconnect %i account(s)." % len(self.current_server.getPlayers()))
-        message_box.setInformativeText("You will also have to enable auto reconnect for all players again, manually.")
+        message_box.setText("This will disconnect %i account(s)." % online)
+        message_box.setInformativeText("You will also have to enable auto reconnect for ALL players again, manually.")
         message_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         message_box.setDefaultButton(QMessageBox.Cancel)
         message_box.setEscapeButton(QMessageBox.Cancel)

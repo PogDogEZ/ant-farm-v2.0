@@ -67,11 +67,6 @@ class PlayersTab(QWidget):
 
         accounts_layout = QVBoxLayout()
 
-        self.accounts_label = QLabel(self)
-        self.accounts_label.setText("Accounts (0):")
-        self.accounts_label.setToolTip("Accounts that we own and can use.")
-        accounts_layout.addWidget(self.accounts_label)
-
         self.accounts_tree = PlayersTab.AccountsTree(self)
         accounts_layout.addWidget(self.accounts_tree)
 
@@ -127,11 +122,6 @@ class PlayersTab(QWidget):
 
         players_layout = QVBoxLayout()
 
-        self.players_label = QLabel(self)
-        self.players_label.setText("All players (0):")
-        self.players_label.setToolTip("All the players that YesCom has seen across all servers, not just the ones online.")
-        players_layout.addWidget(self.players_label)
-
         self.players_tree = PlayersTab.PlayersTree(self)
         players_layout.addWidget(self.players_tree)
 
@@ -149,7 +139,7 @@ class PlayersTab(QWidget):
         if self.main_window.current_server is not None:
             count = len(self.main_window.current_server.getPlayers())
 
-        self.accounts_label.setText("Accounts (%i):" % count)
+        self.accounts_tree.setHeaderLabels(["Accounts (%i):" % count, ""])
         self.disconnect_all_button.setEnabled(
             self.main_window.current_server is not None and self.main_window.current_server.isConnected()
         )
@@ -202,7 +192,7 @@ class PlayersTab(QWidget):
             for top_level_index in range(self.players_tree.topLevelItemCount()):
                 if info == self.players_tree.topLevelItem(top_level_index).info:
                     return
-        self.players_label.setText("All players (%i):" % len(self.yescom.playersHandler.getPlayerCache()))
+        self.players_tree.setHeaderLabels(["All players (%i):" % len(self.yescom.playersHandler.getPlayerCache()), ""])
         self.players_tree.addTopLevelItem(PlayersTab.PlayerItem(self.players_tree, info))
 
     def _on_username_changed(self, text: str) -> None:
@@ -287,12 +277,15 @@ class PlayersTab(QWidget):
             self.dirty = False
             self._connect_thread: Union[PlayersTab.ConnectThread, None] = None
 
-            self.setHeaderHidden(True)
             self.setColumnCount(2)
+            self.setHeaderLabels(["Accounts (0):", ""])
+            self.setToolTip("Accounts that we own and can use.")
 
             self.itemChanged.connect(lambda item: self._set_dirty())
 
             self.main_window.tick.connect(self._on_tick)
+
+            self.resizeColumnToContents(0)
 
         # ------------------------------ Events ------------------------------ #
 
@@ -515,9 +508,9 @@ class PlayersTab(QWidget):
 
         # ------------------------------ Events ------------------------------ #
 
-        def _on_skin_resolved(self, resolved: Tuple[UUID, QIcon]) -> None:
+        def _on_skin_resolved(self, resolved: Tuple[UUID, QPixmap]) -> None:
             if resolved[0] == self.player.getUUID():
-                self.setIcon(0, resolved[1])
+                self.setIcon(0, QIcon(resolved[1]))
 
         def _on_server_change(self) -> None:
             self.setHidden(self.main_window.current_server != self.player.server)
@@ -607,12 +600,15 @@ class PlayersTab(QWidget):
 
             self.dirty = False
 
-            self.setHeaderHidden(True)
             self.setColumnCount(2)
+            self.setHeaderLabels(["All players (0):", ""])
+            self.setToolTip("All the players that YesCom has seen across all servers, not just the ones online.")
 
             self.itemChanged.connect(lambda item: self._set_dirty())
 
             self.main_window.tick.connect(self._on_tick)
+
+            self.resizeColumnToContents(0)
 
         # ------------------------------ Events ------------------------------ #
 
