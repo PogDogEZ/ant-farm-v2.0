@@ -55,7 +55,13 @@ public class ConfigHandler implements ITickable {
         }
     }
 
-    private void readConfiguration() throws IOException {
+    /* ------------------------------ Public API ------------------------------ */
+
+    /**
+     * Reads the {@link IConfig}s from the disk.
+     * @throws IOException If they could not be read for any reason.
+     */
+    public void readConfiguration() throws IOException {
         logger.fine("Reading configurations...");
         File configDirectory = new File(this.configDirectory);
         if (!configDirectory.exists() && !configDirectory.mkdirs()) throw new IOException("Could not create config directory.");
@@ -82,7 +88,11 @@ public class ConfigHandler implements ITickable {
         }
     }
 
-    private void saveConfiguration() throws IOException {
+    /**
+     * Writes the {@link IConfig}s to the disk.
+     * @throws IOException If they could not be written for any reason.
+     */
+    public void saveConfiguration() throws IOException {
         logger.finer("Saving configurations...");
         File configDirectory = new File(this.configDirectory);
         if (!configDirectory.exists() && !configDirectory.mkdirs()) throw new IOException("Could not create config directory.");
@@ -111,8 +121,6 @@ public class ConfigHandler implements ITickable {
                     configurations.size(), System.currentTimeMillis() - start));
         }
     }
-
-    /* ------------------------------ Public API ------------------------------ */
 
     /**
      * Adds a configuration to the known configurations. If the data from the configuration has been loaded from disk,

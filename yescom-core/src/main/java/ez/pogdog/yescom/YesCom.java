@@ -9,6 +9,8 @@ import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.data.PlayersHandler;
 import ez.pogdog.yescom.core.connection.Server;
 import ez.pogdog.yescom.core.data.DataHandler;
+import ez.pogdog.yescom.core.query.ChunkHandler;
+import ez.pogdog.yescom.core.scanning.ScanningHandler;
 import ez.pogdog.yescom.core.threads.FastAsyncUpdater;
 import ez.pogdog.yescom.core.threads.SlowAsyncUpdater;
 import ez.pogdog.yescom.core.util.Bootstrap;
@@ -170,9 +172,11 @@ public class YesCom extends Thread implements IConfig {
     public final List<Server> servers = new ArrayList<>();
 
     public final AccountHandler accountHandler;
+    public final ChunkHandler chunkHandler;
     public final ConfigHandler configHandler;
     public final DataHandler dataHandler;
     public final PlayersHandler playersHandler;
+    public final ScanningHandler scanningHandler;
 
     public /* final */ Interpreter python;
 
@@ -201,6 +205,8 @@ public class YesCom extends Thread implements IConfig {
 
         accountHandler = new AccountHandler(accountsFile);
         playersHandler = new PlayersHandler();
+        chunkHandler = new ChunkHandler();
+        scanningHandler = new ScanningHandler();
 
         configHandler.addConfiguration(this);
         configHandler.addConfiguration(playersHandler);
@@ -265,6 +271,12 @@ public class YesCom extends Thread implements IConfig {
         running = false;
 
         for (Server server : servers) server.disconnectAll("Shutting down");
+        try {
+            configHandler.saveConfiguration();
+        } catch (IOException error) {
+            logger.warning("Couldn't forcefully save configurations: " + error.getMessage());
+            logger.throwing(getClass().getSimpleName(), "shutdown", error);
+        }
         try {
             dataHandler.saveDatabase(true);
         } catch (IOException error) {
