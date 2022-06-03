@@ -1,10 +1,8 @@
 package ez.pogdog.yescom.core.query.invalidmove;
 
-import com.github.steveice10.mc.protocol.data.game.chunk.Chunk;
 import com.github.steveice10.mc.protocol.data.game.entity.player.Hand;
 import com.github.steveice10.mc.protocol.data.game.world.block.BlockChangeRecord;
 import com.github.steveice10.mc.protocol.data.game.world.block.BlockFace;
-import com.github.steveice10.mc.protocol.data.game.world.block.BlockState;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPlaceBlockPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerPositionPacket;
 import com.github.steveice10.mc.protocol.packet.ingame.client.player.ClientPlayerSwingArmPacket;
@@ -27,6 +25,7 @@ import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Logging;
 import ez.pogdog.yescom.api.data.Angle;
 import ez.pogdog.yescom.api.data.BlockPosition;
+import ez.pogdog.yescom.api.data.ChunkState;
 import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.config.IConfig;
@@ -62,51 +61,14 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     /**
      * Valid storages / containers that can be used. There are more, I can't be bothered to add them :p.
      */
-    public final List<String> VALID_STORAGES = Arrays.asList(  // TODO: Make this an option I guess
-            "minecraft:chest",
-            "minecraft:trapped_chest",
-            "minecraft:furnace",
-            "minecraft:lit_furnace",
-            "minecraft:anvil",
-            "minecraft:ender_chest",
-            "minecraft:dispenser",
-            "minecraft:dropper",
-            "minecraft:hopper",
-            "minecraft:command_block", // I mean, am I wrong?
-            "minecraft:repeating_command_block",
-            "minecraft:chain_command_block",
-            "minecraft:enchanting_table",
-            "minecraft:brewing_stand",
-            "minecraft:beacon",
-            "minecraft:white_shulker_box",
-            "minecraft:orange_shulker_box",
-            "minecraft:magenta_shulker_box",
-            "minecraft:light_blue_shulker_box",
-            "minecraft:yellow_shulker_box",
-            "minecraft:lime_shulker_box",
-            "minecraft:pink_shulker_box",
-            "minecraft:gray_shulker_box",
-            "minecraft:silver_shulker_box",
-            "minecraft:cyan_shulker_box",
-            "minecraft:purple_shulker_box",
-            "minecraft:blue_shulker_box",
-            "minecraft:brown_shulker_box",
-            "minecraft:green_shulker_box",
-            "minecraft:red_shulker_box",
-            "minecraft:black_shulker_box"
-    );
+    public final Map<Integer, String> VALID_STORAGES = new HashMap<>(); // TODO: Make this an option I guess
 
     /* ------------------------------ Options ------------------------------ */
 
-    public final Option<Double> LOADED_QUERIES_PER_TICK = new Option<>(
-            "Loaded queries per tick",
-            "The number of queries (that are expected to be loaded) to dispatch, per tick, per player.",
+    public final Option<Double> QUERIES_PER_TICK = new Option<>(
+            "Queries per tick",
+            "The number of queries to dispatch, per tick, per player.",
             1.0
-    );
-    public final Option<Double> UNLOADED_QUERIES_PER_TICK = new Option<>(
-            "Unloaded queries per tick",
-            "The number of queries (that are expected to be unloaded) to dispatch, per tick, per player.",
-            2.0
     );
 
     public final Option<Boolean> ARZI_MODE = new Option<>(
@@ -147,6 +109,9 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         logger.fine(String.format("New invalid move handle for server %s:%d.", server.hostname, server.port));
 
         YesCom.getInstance().configHandler.addConfiguration(this);
+
+        logger.finer("Setting up storages...");
+        setupStorages();
 
         for (Player player : this.server.getPlayers()) available.put(player, new PlayerHandle(player));
         logger.finer(String.format("%d player(s) available.", available.size()));
@@ -216,6 +181,13 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     }
 
     @Override
+    public float getThroughputFor(int ahead) {
+        float throughput = 0.0f;
+        for (PlayerHandle handle : available.values()) throughput += handle.getThroughputFor(ahead);
+        return Math.max(0.0f, throughput - waiting.size());
+    }
+
+    @Override
     public float getQPS() {
         return queriesPerTick * 20.0f;
     }
@@ -238,6 +210,40 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
     @Override
     public IConfig getParent() {
         return server;
+    }
+
+    private void setupStorages() {
+        VALID_STORAGES.put(54, "minecraft:chest");
+        VALID_STORAGES.put(146, "minecraft:trapped_chest");
+        VALID_STORAGES.put(61, "minecraft:furnace");
+        VALID_STORAGES.put(62, "minecraft:lit_furnace");
+        VALID_STORAGES.put(145, "minecraft:anvil");
+        VALID_STORAGES.put(130, "minecraft:ender_chest");
+        VALID_STORAGES.put(23, "minecraft:dispenser");
+        VALID_STORAGES.put(158, "minecraft:dropper");
+        VALID_STORAGES.put(154, "minecraft:hopper");
+        VALID_STORAGES.put(137, "minecraft:command_block"); // I mean, am I wrong?
+        VALID_STORAGES.put(210, "minecraft:repeating_command_block");
+        VALID_STORAGES.put(211, "minecraft:chain_command_block");
+        VALID_STORAGES.put(116, "minecraft:enchanting_table");
+        VALID_STORAGES.put(117, "minecraft:brewing_stand");
+        VALID_STORAGES.put(138, "minecraft:beacon");
+        VALID_STORAGES.put(219, "minecraft:white_shulker_box");
+        VALID_STORAGES.put(220, "minecraft:orange_shulker_box");
+        VALID_STORAGES.put(221, "minecraft:magenta_shulker_box");
+        VALID_STORAGES.put(222, "minecraft:light_blue_shulker_box");
+        VALID_STORAGES.put(223, "minecraft:yellow_shulker_box");
+        VALID_STORAGES.put(224, "minecraft:lime_shulker_box");
+        VALID_STORAGES.put(225, "minecraft:pink_shulker_box");
+        VALID_STORAGES.put(226, "minecraft:gray_shulker_box");
+        VALID_STORAGES.put(227, "minecraft:silver_shulker_box");
+        VALID_STORAGES.put(228, "minecraft:cyan_shulker_box");
+        VALID_STORAGES.put(229, "minecraft:purple_shulker_box");
+        VALID_STORAGES.put(230, "minecraft:blue_shulker_box");
+        VALID_STORAGES.put(231, "minecraft:brown_shulker_box");
+        VALID_STORAGES.put(232, "minecraft:green_shulker_box");
+        VALID_STORAGES.put(233, "minecraft:red_shulker_box");
+        VALID_STORAGES.put(234, "minecraft:black_shulker_box");
     }
 
     /* ------------------------------ Events ------------------------------ */
@@ -268,10 +274,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
         private final Set<BlockPosition> confirmedStorages = new HashSet<>();
 
-        // Store loaded and unloaded separately because we can treat them differently
-        private final Map<Integer, InvalidMoveQuery> loadedQueryMap = new HashMap<>();
-        private final Map<Integer, InvalidMoveQuery> unloadedQueryMap = new HashMap<>();
-
+        private final Map<Integer, InvalidMoveQuery> queryMap = new HashMap<>();
         private final Map<Integer, Integer> windowToTPIDMap = new HashMap<>();
 
         private final Player player;
@@ -287,7 +290,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
         private int ticksSinceTeleport;
 
-        private IsLoadedQuery.State previousState = IsLoadedQuery.State.LOADED; // Assume loaded to force resync
+        private ChunkState.State previousState = ChunkState.State.LOADED; // Assume loaded to force resync
 
         private int packetsElapsed = 0;
         private int ticksElapsed = 0;
@@ -309,17 +312,14 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         private void tick() {
             // Expect response within <our ping in ticks> + 2 more ticks for safety
             float minExpectedTicks = (40.0f + Math.max(1.0f, player.getServerPing()) / 50.0f) * (20.0f / Math.max(1.0f, player.getServerTPS()));
-            if (++ticksSinceTeleport > minExpectedTicks && (!loadedQueryMap.isEmpty() || !unloadedQueryMap.isEmpty())) {
+            if (++ticksSinceTeleport > minExpectedTicks && !queryMap.isEmpty()) {
                 logger.warning(String.format("%s packet loss (5) ticks: %d, queued: %d.", player.getUsername(),
-                        ticksSinceTeleport, loadedQueryMap.size() + unloadedQueryMap.size()));
+                        ticksSinceTeleport, queryMap.size()));
                 Emitters.ON_REPORT.emit(new PacketLossReport(player, 6));
 
                 synchronized (this) {
-                    for (InvalidMoveQuery query : loadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
-                    for (InvalidMoveQuery query : unloadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
-
-                    loadedQueryMap.clear();
-                    unloadedQueryMap.clear();
+                    for (InvalidMoveQuery query : queryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
+                    queryMap.clear();
                 }
             }
             if (++ticksElapsed == Integer.MAX_VALUE) {
@@ -402,16 +402,14 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             logger.finer(String.format("Unregistered invalid move handle for player %s (dim %s).", player.getUsername(),
                     dimension));
 
-            logger.finer(String.format("Rescheduling %d queries.", loadedQueryMap.size() + unloadedQueryMap.size()));
-            for (InvalidMoveQuery query : loadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
-            for (InvalidMoveQuery query : unloadedQueryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
+            logger.finer(String.format("Rescheduling %d queries.", queryMap.size()));
+            for (InvalidMoveQuery query : queryMap.values()) InvalidMoveHandle.this.dispatch(query, null);
 
             synchronized (confirmedStorages) {
                 confirmedStorages.clear(); // Free memory early
             }
             synchronized (this) {
-                loadedQueryMap.clear();
-                unloadedQueryMap.clear();
+                queryMap.clear();
                 windowToTPIDMap.clear();
             }
         }
@@ -427,13 +425,14 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                     Set<BlockPosition> inChunk = new HashSet<>();
                     // FIXME: Works with non-full chunks?
                     for (BlockPosition storage : confirmedStorages) {
-                        if (storage.getX() >> 4 == chunkData.getX() && storage.getZ() >> 4 == chunkData.getZ()) inChunk.add(storage);
+                        if (storage.getX() >> 4 == chunkData.getX() && storage.getZ() >> 4 == chunkData.getZ())
+                            inChunk.add(storage);
                     }
                     confirmedStorages.removeAll(inChunk);
 
                     for (CompoundTag tileEntity : chunkData.getTileEntities()) {
                         Map<String, Tag> values = tileEntity.getValue();
-                        if (VALID_STORAGES.contains((String)values.getOrDefault("id", new StringTag("secret:message:WTF!!")).getValue())) {
+                        if (VALID_STORAGES.containsValue((String)values.getOrDefault("id", new StringTag("secret:message:WTF!!")).getValue())) {
                             if (values.containsKey("x") && values.containsKey("y") && values.containsKey("z")) {
                                 BlockPosition blockPosition = new BlockPosition(
                                         (int)values.get("x").getValue(),
@@ -485,7 +484,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                         blockChange.getRecord().getPosition().getY(),
                         blockChange.getRecord().getPosition().getZ()
                 );
-                boolean valid = VALID_STORAGES.contains(blockChange.getRecord().getBlock().getId());
+                boolean valid = VALID_STORAGES.containsKey(blockChange.getRecord().getBlock().getId());
                 boolean isCurrent = position.equals(bestStorage);
 
                 synchronized (confirmedStorages) {
@@ -512,7 +511,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
                         if (bestStorage != null && bestStorage.equals(position)) bestStorage = null;
                         confirmedStorages.remove(position);
-                        if (VALID_STORAGES.contains(record.getBlock().getId())) {
+                        if (VALID_STORAGES.containsKey(record.getBlock().getId())) {
                             logger.finest("Found storage: " + position);
                             confirmedStorages.add(position);
                         }
@@ -660,17 +659,15 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                     // System.out.println(loadedQueryMap);
                     // System.out.println(windowToTPIDMap);
 
-                    InvalidMoveQuery query = loadedQueryMap.getOrDefault(positionRotation.getTeleportId(),
-                            unloadedQueryMap.get(positionRotation.getTeleportId()));
+                    InvalidMoveQuery query = queryMap.get(positionRotation.getTeleportId());
 
                     if (ARZI_MODE.value && WID_RESYNC.value) {
                         if (openWindowID < 0) { // Did we not manage to open the storage before this query?
                             // We weren't able to open the storage for some reason, meaning that we can't accurately
                             // determine the state of the chunk, UNLESS the previous query was unloaded, as the storage
                             // will still be open, we still need to re-align the teleport ID -> window ID mappings though
-                            if (previousState == IsLoadedQuery.State.UNLOADED) {
-                                loadedQueryMap.remove(positionRotation.getTeleportId());
-                                unloadedQueryMap.remove(positionRotation.getTeleportId());
+                            if (previousState == ChunkState.State.UNLOADED) {
+                                queryMap.remove(positionRotation.getTeleportId());
 
                                 finalise(query, closeWindowID > 0 && packetsElapsed <= 3);
                             }
@@ -731,14 +728,12 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                                     windowToTPIDMap.getOrDefault(openWindowID, -1), expectedWindowID));
                         }
 
-                        loadedQueryMap.remove(positionRotation.getTeleportId());
-                        unloadedQueryMap.remove(positionRotation.getTeleportId());
+                        queryMap.remove(positionRotation.getTeleportId());
 
                         finalise(query, closeWindowID > 0 && packetsElapsed <= 3);
 
                     } else { // Basic teleport ID -> query mapping
-                        loadedQueryMap.remove(positionRotation.getTeleportId());
-                        unloadedQueryMap.remove(positionRotation.getTeleportId());
+                        queryMap.remove(positionRotation.getTeleportId());
 
                         // 3 packets of leeway cos we can also get the sound packet, and other storages may have weird
                         // things that idk about
@@ -747,18 +742,15 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                             if (!ARZI_MODE.value) {
                                 // Window was closed, chunk is loaded, re-open the storage and reschedule all following queries
                                 logger.finest(String.format("%s got loaded chunk, rescheduling %d queries.",
-                                        player.getUsername(), loadedQueryMap.size() + unloadedQueryMap.size()));
+                                        player.getUsername(), queryMap.size()));
 
                                 storageOpen = false;
                                 openingStorage = true; // We're attempting to open the storage again
                                 openStorage();
 
-                                for (InvalidMoveQuery query0 : loadedQueryMap.values())
-                                    InvalidMoveHandle.this.dispatch(query0, null);
-                                for (InvalidMoveQuery query0 : unloadedQueryMap.values())
-                                    InvalidMoveHandle.this.dispatch(query0, null);
-                                loadedQueryMap.clear();
-                                unloadedQueryMap.clear();
+                                for (InvalidMoveQuery query1 : queryMap.values())
+                                    InvalidMoveHandle.this.dispatch(query1, null);
+                                queryMap.clear();
                             }
 
                             finalise(query, true);
@@ -768,16 +760,12 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
                         } else { // Random teleport
                             logger.finer(String.format("%s got random teleport (ID %d), rescheduling %d queries.",
-                                    player.getUsername(), positionRotation.getTeleportId(),
-                                    loadedQueryMap.size() + unloadedQueryMap.size()));
+                                    player.getUsername(), positionRotation.getTeleportId(), queryMap.size()));
                             player.send(new ClientTeleportConfirmPacket(positionRotation.getTeleportId()));
 
-                            for (InvalidMoveQuery query0 : loadedQueryMap.values())
-                                InvalidMoveHandle.this.dispatch(query0, null);
-                            for (InvalidMoveQuery query0 : unloadedQueryMap.values())
-                                InvalidMoveHandle.this.dispatch(query0, null);
-                            loadedQueryMap.clear();
-                            unloadedQueryMap.clear();
+                            for (InvalidMoveQuery query1 : queryMap.values())
+                                InvalidMoveHandle.this.dispatch(query1, null);
+                            queryMap.clear();
 
                             // Need to reset everything too
                             resync = true;
@@ -866,7 +854,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         }
 
         private void finalise(InvalidMoveQuery query, boolean loaded) {
-            IsLoadedQuery.State state = loaded ? IsLoadedQuery.State.LOADED : IsLoadedQuery.State.UNLOADED;
+            ChunkState.State state = loaded ? ChunkState.State.LOADED : ChunkState.State.UNLOADED;
             previousState = state;
             if (query == null) return;
 
@@ -893,15 +881,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             float expectedTicks = Math.max(1.0f, player.getServerPing()) / 50.0f;
 
             // FIXME: This needs to be split across multiple ticks as otherwise it'll send a ton of packets at first, and then even out
-            if (expectedTicks * Math.max(LOADED_QUERIES_PER_TICK.value, UNLOADED_QUERIES_PER_TICK.value) <
-                    loadedQueryMap.size() + unloadedQueryMap.size())
-                return false; // Too many queries in flight
-
-            if (query.expected == IsLoadedQuery.State.LOADED) {
-                return expectedTicks * LOADED_QUERIES_PER_TICK.value > loadedQueryMap.size();
-            } else {
-                return expectedTicks * UNLOADED_QUERIES_PER_TICK.value > unloadedQueryMap.size();
-            }
+            return expectedTicks * QUERIES_PER_TICK.value < queryMap.size();
         }
 
         /**
@@ -911,6 +891,12 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             // Do we have a storage, have we spawned in and has the storage been opened?
             return bestStorage != null && player.isSpawned() && player.getCurrentWindowID() >= 0 && !resync &&
                     (storageOpen || ARZI_MODE.value);
+        }
+
+        public float getThroughputFor(int ahead) {
+            if (ahead <= 0 || !canQuery()) return 0.0f;
+            float expectedTicks = Math.max(1.0f, player.getServerPing()) / 50.0f;
+            return (float)Math.max(0.0f, QUERIES_PER_TICK.value * ahead - queryMap.size() / expectedTicks);
         }
 
         /**
@@ -927,13 +913,9 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
             BlockPosition position = query.position.getPosition(8, 5000, 8);
 
-            if (loadedQueryMap.isEmpty() && unloadedQueryMap.isEmpty()) ticksSinceTeleport = 0;
+            if (queryMap.isEmpty()) ticksSinceTeleport = 0;
             synchronized (this) {
-                if (query.expected == IsLoadedQuery.State.LOADED) {
-                    loadedQueryMap.put(++estimatedTeleportID, query);
-                } else {
-                    unloadedQueryMap.put(++estimatedTeleportID, query);
-                }
+                queryMap.put(++estimatedTeleportID, query);
             }
 
             if (ARZI_MODE.value) openStorage(); // TODO: Open storage if not in ARZI mode elsewhere
@@ -945,9 +927,12 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
                 }
             }
 
+            int positionX = Math.min(29999999, Math.max(-29999999, position.getX())); // We'll get kicked otherwise
+            int positionZ = Math.min(29999999, Math.max(-29999999, position.getZ()));
+
             // Sending this after we've opened the storage (with ARZI mode) means that we can guarantee something will
             // have gone wrong if we do not receive the open storage packet before the response
-            player.send(new ClientPlayerPositionPacket(false, position.getX(), position.getY(), position.getZ()));
+            player.send(new ClientPlayerPositionPacket(false, positionX, position.getY(), positionZ));
             player.send(new ClientTeleportConfirmPacket(estimatedTeleportID));
         }
     }

@@ -1,6 +1,7 @@
 package ez.pogdog.yescom.core.query;
 
 import ez.pogdog.yescom.api.data.ChunkPosition;
+import ez.pogdog.yescom.api.data.ChunkState;
 import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.connection.Server;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveQuery;
@@ -18,12 +19,12 @@ public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQue
 	public final ChunkPosition position;
 	public final Dimension dimension;
 
-	public final State expected; // The expected state of this query
+	public final ChunkState.State expected; // The expected state of this query
 	public final Priority priority; // The priority of this query
 
 	private final long expiry;
 
-	public IsLoadedQuery(ChunkPosition position, Dimension dimension, State expected, Priority priority, long expiry) {
+	public IsLoadedQuery(ChunkPosition position, Dimension dimension, ChunkState.State expected, Priority priority, long expiry) {
 		this.position = position;
 		this.dimension = dimension;
 		this.expected = expected;
@@ -66,16 +67,9 @@ public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQue
 	/**
 	 * @return The state of the chunk.
 	 */
-	public abstract State getState();
+	public abstract ChunkState getState();
 
 	/* ------------------------------ Classes ------------------------------ */
-
-	/**
-	 * The state of the chunk.
-	 */
-	public enum State {
-		WAITING, LOADED, UNLOADED;
-	}
 
 	/**
 	 * Query priority.

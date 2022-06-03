@@ -46,6 +46,12 @@ public interface IQueryHandle<T extends IQuery> extends ITickable {
     Dimension getDimension();
 
     /**
+     * @param ahead The time look ahead for, in ticks.
+     * @return The maximum number of queries that could be processed in the given time.
+     */
+    float getThroughputFor(int ahead);
+
+    /**
      * @return The number of queries being processed per second.
      */
     float getQPS();

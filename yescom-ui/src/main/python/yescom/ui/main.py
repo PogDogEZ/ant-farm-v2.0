@@ -82,6 +82,7 @@ class MainWindow(QMainWindow):
     server_changed = pyqtSignal()
     connection_established = pyqtSignal(object)
     connection_lost = pyqtSignal(object)
+    chunk_state = pyqtSignal(object)
 
     account_added = pyqtSignal(object)
     account_error = pyqtSignal(object)
@@ -210,6 +211,7 @@ class MainWindow(QMainWindow):
 
         emitters.ON_CONNECTION_ESTABLISHED.connect(self.connection_established.emit)
         emitters.ON_CONNECTION_LOST.connect(self.connection_lost.emit)
+        emitters.ON_CHUNK_STATE.connect(self.chunk_state.emit)
 
         emitters.ON_NEW_PLAYER_CACHED.connect(self.new_player_cached.emit)
         emitters.ON_TRUST_STATE_CHANGED.connect(self.trust_state_changed.emit)

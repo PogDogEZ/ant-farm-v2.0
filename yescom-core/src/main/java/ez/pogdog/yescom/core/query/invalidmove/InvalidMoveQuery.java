@@ -1,6 +1,7 @@
 package ez.pogdog.yescom.core.query.invalidmove;
 
 import ez.pogdog.yescom.api.data.ChunkPosition;
+import ez.pogdog.yescom.api.data.ChunkState;
 import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.query.IQuery;
 import ez.pogdog.yescom.core.query.IQueryHandle;
@@ -8,7 +9,7 @@ import ez.pogdog.yescom.core.query.IsLoadedQuery;
 
 public class InvalidMoveQuery extends IsLoadedQuery<InvalidMoveHandle> {
 
-    private State state; // State callback
+    private ChunkState.State state; // State callback
 
     /**
      * @param chunkPosition Position to query.
@@ -17,15 +18,15 @@ public class InvalidMoveQuery extends IsLoadedQuery<InvalidMoveHandle> {
      * @param priority Priority of query.
      * @param expiry Time until expiry, in milliseconds.
      */
-    public InvalidMoveQuery(ChunkPosition chunkPosition, Dimension dimension, State expected, Priority priority, long expiry) {
+    public InvalidMoveQuery(ChunkPosition chunkPosition, Dimension dimension, ChunkState.State expected, Priority priority, long expiry) {
         super(chunkPosition, dimension, expected, priority, expiry);
 
-        state = State.WAITING;
+        // state = State.WAITING;
     }
 
     @Override
     public void dispatch(InvalidMoveHandle handle) {
-        state = State.WAITING;
+        // state = State.WAITING;
     }
 
     @Override
@@ -39,14 +40,14 @@ public class InvalidMoveQuery extends IsLoadedQuery<InvalidMoveHandle> {
     }
 
     @Override
-    public State getState() {
-        return state;
+    public ChunkState getState() {
+        return new ChunkState(position, dimension, state);
     }
 
     /**
      * Sets the state of this query. ONLY FOR USE WITH {@link InvalidMoveHandle}.
      */
-    public void setState(State state) { // TODO: Package private
+    public void setState(ChunkState.State state) { // TODO: Package private
         this.state = state;
     }
 }

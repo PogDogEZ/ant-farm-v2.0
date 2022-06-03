@@ -2,6 +2,7 @@ package ez.pogdog.yescom.core;
 
 import com.github.steveice10.mc.auth.exception.request.RequestException;
 import com.github.steveice10.packetlib.packet.Packet;
+import ez.pogdog.yescom.api.data.ChunkState;
 import ez.pogdog.yescom.api.data.player.PlayerInfo;
 import ez.pogdog.yescom.api.data.chat.ChatMessage;
 import ez.pogdog.yescom.api.data.player.death.Death;
@@ -137,6 +138,11 @@ public class Emitters {
      */
     public static final Emitter<Server> ON_CONNECTION_LOST = new Emitter<>(Server.class);
 
+    /**
+     * Fired when a chunk state has been resolved for a given server.
+     */
+    public static final Emitter<ServerChunkState> ON_CHUNK_STATE = new Emitter<>(ServerChunkState.class);
+
     /* ------------------------------ Reporting ------------------------------ */
 
     /**
@@ -213,6 +219,17 @@ public class Emitters {
             super(info, server);
 
             this.death = death;
+        }
+    }
+
+    public static class ServerChunkState {
+
+        public final Server server;
+        public final ChunkState state;
+
+        public ServerChunkState(Server server, ChunkState state) {
+            this.server = server;
+            this.state = state;
         }
     }
 }
