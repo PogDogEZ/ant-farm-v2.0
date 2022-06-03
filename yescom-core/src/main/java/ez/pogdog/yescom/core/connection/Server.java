@@ -522,9 +522,7 @@ public class Server implements IConfig, ITickable {
      * @return A {@link ChatMessage}, if null this message should be discarded.
      */
     public ChatMessage parseChatMessage(Player player, ServerChatPacket packet) {
-        ChatMessage chatMessage = behaviour.parseChatMessage(player, packet);
-        if (chatMessage != null) handleChatMessage(chatMessage);
-        return chatMessage;
+        return behaviour.parseChatMessage(player, packet);
     }
 
     /**

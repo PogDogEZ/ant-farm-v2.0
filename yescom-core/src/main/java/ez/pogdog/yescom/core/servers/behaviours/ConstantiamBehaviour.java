@@ -111,6 +111,7 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) met Allah$"), Death.Type.SLASH_KILL);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) has voted$"), Death.Type.SLASH_KILL);
 
+        deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) burnt into a crisp whilist fighting (?<killer>[A-Za-z0-9_]{1,20})"), Death.Type.FIRE);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) decided to jump into lava$"), Death.Type.FIRE);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) tried to swim in lava$"), Death.Type.FIRE);
         deathMessages.put(Pattern.compile("^(?<player>[A-Za-z0-9_]{1,20}) became charcoal$"), Death.Type.FIRE);

@@ -60,7 +60,7 @@ public class MinecraftChat {
         MINECRAFT_COLOURS.put("bold", "§l");
         MINECRAFT_COLOURS.put("strikethrough", "§m");
         MINECRAFT_COLOURS.put("underline", "§n");
-        MINECRAFT_COLOURS.put("italic", "$o");
+        MINECRAFT_COLOURS.put("italic", "§o");
         MINECRAFT_COLOURS.put("reset", "§r");
     }
 

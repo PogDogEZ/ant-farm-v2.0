@@ -8,6 +8,8 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
+from ..dialogs.player_info import PlayerInfoDialog
+
 from java.util import UUID
 
 from ez.pogdog.yescom import YesCom
@@ -633,7 +635,8 @@ class PlayersTab(QWidget):
             trusted.setChecked(self.yescom.playersHandler.isTrusted(info.uuid))
 
             menu.addSeparator()
-
+            menu.addAction("View info", lambda: self._view_info(info))
+            menu.addSeparator()
             menu.addAction("Open NameMC...", lambda: webbrowser.open("https://namemc.com/profile/%s" % info.uuid))
             menu.addSeparator()
             menu.addAction(
@@ -668,6 +671,10 @@ class PlayersTab(QWidget):
             self.main_window.players_tab.select_account(player)
             self.main_window.players_tab.expand_account(player)
             self.main_window.set_selected(self.main_window.players_tab)
+
+        def _view_info(self, info: PlayerInfo) -> None:
+            player_info_dialog = PlayerInfoDialog(self, info)
+            player_info_dialog.show()
 
     class PlayerItem(QTreeWidgetItem):
         """

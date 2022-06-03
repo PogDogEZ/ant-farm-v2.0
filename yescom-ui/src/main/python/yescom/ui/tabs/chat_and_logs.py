@@ -1,10 +1,24 @@
 #!/usr/bin/env python3
 
-from typing import List
+import datetime
+import time
+import webbrowser
+from typing import Dict, List, Union
 
+from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
+from ..dialogs.player_info import PlayerInfoDialog
+
+from java.util import UUID
+
+from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
+from ez.pogdog.yescom.api.data.chat import (
+    ChatMessage, DeathMessage, JoinLeaveMessage, PartyMessage, RegularMessage, WhisperMessage,
+)
+from ez.pogdog.yescom.api.data.player import PlayerInfo
+from ez.pogdog.yescom.api.data.player.death import Death
 from ez.pogdog.yescom.core import Emitters
 from ez.pogdog.yescom.core.connection import Player
 
@@ -27,8 +41,6 @@ class ChatAndLogsTab(QWidget):
 
         self.main_window.player_added.connect(self._on_player_added)
         self.main_window.player_removed.connect(self._on_player_removed)
-
-        self.main_window.player_chat.connect(self._on_player_chat)
 
         self._on_server_changed()
 
@@ -57,12 +69,13 @@ class ChatAndLogsTab(QWidget):
 
         main_layout = QVBoxLayout(self.chat_tab)
 
-        self.chat_browser = QTextBrowser(self.chat_tab)
+        self.chat_browser = ChatAndLogsTab.ChatBrowser(self.chat_tab)
         main_layout.addWidget(self.chat_browser)
 
         message_layout = QHBoxLayout()
 
         self.player_combo_box = QComboBox(self.chat_tab)
+        self.player_combo_box.currentIndexChanged.connect(self._on_player_selected)
         self.player_combo_box.setFixedWidth(QApplication.fontMetrics().width("M" * 11))  # 16 is preferrable, but looks a bit much
         message_layout.addWidget(self.player_combo_box)
 
@@ -114,8 +127,8 @@ class ChatAndLogsTab(QWidget):
             if index >= 0:
                 self.player_combo_box.removeItem(index)
 
-    def _on_player_chat(self, player_chat: Emitters.PlayerChat) -> None:
-        ...
+    def _on_player_selected(self, index: int) -> None:
+        self.chat_browser.current = self.player_combo_box.currentData()
 
     def _on_chat_text_changed(self, text: str) -> None:
         self.send_on_current_button.setEnabled(bool(text))
@@ -185,6 +198,283 @@ class ChatAndLogsTab(QWidget):
             for player in players:
                 player.chat(self.chat_message_edit.text())
             self.chat_message_edit.clear()
+
+    # ------------------------------ Classes ------------------------------ #
+
+    class ChatBrowser(QTextEdit):
+        """
+        Displays nicely formatted chat messages.
+        """
+
+        @property
+        def current(self) -> Player:
+            return self._current
+
+        @current.setter
+        def current(self, value: Player) -> None:
+            if value != self._current:
+                self._current = value
+                self.clear()
+
+                if not value in self._chat_lines:
+                    self._chat_lines[value] = []
+                for chat_message in self._chat_lines[value]:
+                    self._add_chat_message(chat_message)
+
+        def __init__(self, parent: QWidget) -> None:
+            super().__init__(parent)
+
+            self.yescom = YesCom.getInstance()
+            self.main_window = MainWindow.INSTANCE
+            self.config = self.main_window.config.chat
+
+            # self.setAcceptRichText(True)
+            self.setReadOnly(True)
+
+            self._current: Union[Player, None] = None
+            self._chat_lines: Dict[Player, List[ChatMessage]] = {}
+
+            self.main_window.player_chat.connect(self._on_player_chat)  # TODO: Loading older messages
+
+        # ------------------------------ Events ------------------------------ #
+
+        def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+            menu = self.createStandardContextMenu()
+            clipboard = QApplication.clipboard()
+
+            current = self.main_window.current_server
+            if current is not None and self._current is not None:
+                cursor: QTextCursor = self.cursorForPosition(event.pos())
+                chat_message = self._chat_lines[self._current][cursor.blockNumber() - 1]
+                logger.finer("Clicked chat message: %s" % chat_message)
+
+                uuid: Union[UUID, None] = None
+                whisper_option = False
+
+                if chat_message.getClass() == DeathMessage:
+                    uuid = chat_message.player
+                elif chat_message.getClass() == JoinLeaveMessage:
+                    uuid = chat_message.player
+                elif chat_message.getClass() == PartyMessage:
+                    uuid = chat_message.sender
+                    whisper_option = True
+                elif chat_message.getClass() == RegularMessage:
+                    uuid = chat_message.sender
+                    whisper_option = True
+                elif chat_message.getClass() == WhisperMessage:
+                    uuid = chat_message.recipient
+                    whisper_option = True
+
+                if uuid is not None:
+                    menu.addSeparator()
+
+                    # TODO: Whisper to option
+                    # if whisper_option:
+                    #     menu.addAction("Whisper to player")
+                    #     menu.addSeparator()
+
+                    player = current.getPlayer(uuid)
+
+                    view_player = menu.addAction("View account", lambda: self._view_account(player))
+                    view_player.setEnabled(player is not None)
+                    menu.addAction("View info", lambda: self._view_info(self.yescom.playersHandler.getInfo(uuid)))
+
+                    menu.addSeparator()
+                    menu.addAction("Open NameMC...", lambda: webbrowser.open("https://namemc.com/profile/%s" % uuid))
+                    menu.addSeparator()
+                    menu.addAction(
+                        "Copy username",
+                        lambda: clipboard.setText(self.yescom.playersHandler.getName(uuid, "<unknown name>")),
+                    )
+                    menu.addAction("Copy UUID", lambda: clipboard.setText(str(uuid)))
+
+            menu.exec(event.globalPos())
+
+        def _on_player_chat(self, player_chat: Emitters.PlayerChat) -> None:
+            player = player_chat.server.getPlayer(player_chat.chatMessage.receiver)
+            if not player in self._chat_lines:
+                self._chat_lines[player] = []
+            self._chat_lines[player].append(player_chat.chatMessage)
+
+            popped = 0
+            while len(self._chat_lines[player]) > self.config.MAX_LINES.value:
+                self._chat_lines[player].pop(0)
+                popped += 1
+
+            if player == self._current:
+                self._add_chat_message(player_chat.chatMessage)
+                self._pop_chat_messages(popped)
+
+        # ------------------------------ Utility ------------------------------ #
+
+        def _toggle_trusted(self, uuid: UUID) -> None:
+            if self.yescom.playersHandler.isTrusted(uuid):
+                self.yescom.playersHandler.removeTrusted(uuid)
+            else:
+                self.yescom.playersHandler.addTrusted(uuid)
+
+        def _view_account(self, player: Player) -> None:
+            if self.main_window.current_server != player.server:
+                self.main_window.current_server = player.server
+
+            self.main_window.players_tab.select_account(player)
+            self.main_window.players_tab.expand_account(player)
+            self.main_window.set_selected(self.main_window.players_tab)
+
+        def _view_info(self, info: PlayerInfo) -> None:
+            player_info_dialog = PlayerInfoDialog(self, info)
+            player_info_dialog.show()
+
+        def _add_chat_message(self, chat_message: ChatMessage) -> None:
+            """
+            Adds a chat message to this chat browser.
+
+            :param chat_message: The chat message to add.
+            """
+
+            colours = {
+                "0": QColor(*self.config.BLACK_COLOUR.value),
+                "1": QColor(*self.config.DARK_BLUE_COLOUR.value),
+                "2": QColor(*self.config.DARK_GREEN_COLOUR.value),
+                "3": QColor(*self.config.DARK_AQUA_COLOUR.value),
+                "4": QColor(*self.config.DARK_RED_COLOUR.value),
+                "5": QColor(*self.config.DARK_PURPLE_COLOUR.value),
+                "6": QColor(*self.config.GOLD_COLOUR.value),
+                "7": QColor(*self.config.GRAY_COLOUR.value),
+                "8": QColor(*self.config.DARK_GRAY_COLOUR.value),
+                "9": QColor(*self.config.BLUE_COLOUR.value),
+                "a": QColor(*self.config.GREEN_COLOUR.value),
+                "b": QColor(*self.config.AQUA_COLOUR.value),
+                "c": QColor(*self.config.RED_COLOUR.value),
+                "d": QColor(*self.config.PURPLE_COLOUR.value),
+                "e": QColor(*self.config.YELLOW_COLOUR.value),
+                "f": QColor(*self.config.WHITE_COLOUR.value),
+            }
+
+            previous_scroll = self.verticalScrollBar().sliderPosition()
+            is_maximum = previous_scroll == self.verticalScrollBar().maximum()
+
+            tooltip = ""
+            timestamp = str(datetime.datetime.fromtimestamp(chat_message.timestamp // 1000))
+            # timedelta = str(datetime.timedelta(seconds=int(time.time()) - chat_message.timestamp // 1000,))
+
+            if chat_message.getClass() == DeathMessage:
+                death = chat_message.death
+                tooltip = "Player %s death.\nType: %s\nKiller: %s\nTimestamp: %s\nRight click for more options." % (
+                    self.yescom.playersHandler.getName(chat_message.player),
+                    str(death.type).capitalize().replace("_", " "),
+                    "None (or unknown)" if death.killer is None else self.yescom.playersHandler.getName(death.killer),
+                    timestamp,  # timedelta,
+                )
+
+            elif chat_message.getClass() == JoinLeaveMessage:
+                tooltip = "Player %s %s.\nTimestamp: %s\nRight click for more options." % (
+                    self.yescom.playersHandler.getName(chat_message.player),
+                    "joined" if chat_message.joining else "left",
+                    timestamp,  # timedelta,
+                )
+            elif chat_message.getClass() == PartyMessage:
+                tooltip = "Party message from %s.\nMessage: %r\nTimestamp: %s\nRight click for more options." % (
+                    self.yescom.playersHandler.getName(chat_message.sender),
+                    chat_message.actualMessage,
+                    timestamp,  # timedelta,
+                )
+            elif chat_message.getClass() == RegularMessage:
+                tooltip = "Chat message from %s.\nMessage: %r\nTimestamp: %s\nRight click for more options." % (
+                    self.yescom.playersHandler.getName(chat_message.sender),
+                    chat_message.actualMessage,
+                    timestamp,  # timedelta,
+                )
+            elif chat_message.getClass() == WhisperMessage:
+                tooltip = "Whisper %s %s.\nMessage: %r\nTimestamp: %s\nRight click for more options." % (
+                    "to" if chat_message.sending else "from",
+                    self.yescom.playersHandler.getName(chat_message.recipient),
+                    chat_message.actualMessage,
+                    timestamp,  # timedelta,
+                )
+            else:
+                tooltip = "Timestamp: %s" % timestamp
+
+            cursor: QTextCursor = self.textCursor()
+            # selection_before = cursor.selectionStart(), cursor.selectionEnd()
+            position_before = cursor.position()
+
+            cursor.clearSelection()
+            cursor.movePosition(QTextCursor.End)
+
+            char_format = QTextCharFormat()
+            if tooltip:
+                char_format.setToolTip(tooltip)
+
+            cursor.insertBlock()
+            cursor.setCharFormat(char_format)
+
+            skip_first = not chat_message.message.startswith("§")
+            message = chat_message.message.split("§")
+
+            if skip_first:
+                cursor.insertText(message.pop(0))
+
+            for part in message:
+                if not part:
+                    continue
+                code, part = part[0], part[1:]
+
+                if code in colours:
+                    char_format.setForeground(colours[code])
+                elif code == "l":  # Bold
+                    char_format.setFontWeight(QFont.Bold)
+                elif code == "m":  # Strikethrough
+                    char_format.setFontStrikeOut(True)
+                elif code == "n":  # Underline
+                    char_format.setFontUnderline(True)
+                elif code == "o":  # Italic
+                    char_format.setFontItalic(True)
+                elif code == "r":  # Reset
+                    char_format = QTextCharFormat()
+                    if tooltip:
+                        char_format.setToolTip(tooltip)
+
+                cursor.setCharFormat(char_format)
+                cursor.insertText(part)
+
+            # cursor.select(QTextCursor.)  # TODO: Redo selection
+            cursor.setPosition(position_before)
+            self.setTextCursor(cursor)
+
+            if is_maximum:
+                self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+            else:
+                self.verticalScrollBar().setValue(previous_scroll)
+
+        def _pop_chat_messages(self, count: int) -> None:
+            """
+            Pops chat messages from the top of the chat history.
+
+            :param count: The number of chat messages to pop.
+            """
+
+            if not count:
+                return
+
+            previous_scroll = self.verticalScrollBar().sliderPosition()
+            is_maximum = previous_scroll == self.verticalScrollBar().maximum()
+
+            cursor: QTextCursor = self.textCursor()
+
+            cursor.movePosition(QTextCursor.Start)
+            for index in range(count):
+                cursor.select(QTextCursor.BlockUnderCursor)
+                cursor.removeSelectedText()
+                cursor.deleteChar()
+
+            cursor.movePosition(QTextCursor.End)
+            self.setTextCursor(cursor)
+
+            if is_maximum:
+                self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+            else:
+                self.verticalScrollBar().setValue(previous_scroll)
 
 
 from ..main import MainWindow

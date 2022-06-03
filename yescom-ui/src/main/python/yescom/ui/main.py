@@ -14,6 +14,7 @@ from java.lang import System
 from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
 from ez.pogdog.yescom.core.connection import Server
+from ez.pogdog.yescom.ui.config import UIConfig
 
 logger = Logging.getLogger("yescom.ui.window")
 
@@ -128,6 +129,7 @@ class MainWindow(QMainWindow):
         super().__init__(*args, **kwargs)
 
         self.yescom = YesCom.getInstance()
+        self.config = UIConfig()
 
         self.setWindowTitle("YesCom \ud83d\ude08")
 
