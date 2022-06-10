@@ -34,15 +34,12 @@ import ez.pogdog.yescom.core.connection.Player;
 import ez.pogdog.yescom.core.connection.Server;
 import ez.pogdog.yescom.core.query.IQuery;
 import ez.pogdog.yescom.core.query.IQueryHandle;
-import ez.pogdog.yescom.core.query.IsLoadedQuery;
 import ez.pogdog.yescom.core.report.invalidmove.NoStorageReport;
 import ez.pogdog.yescom.core.report.invalidmove.PacketLossReport;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Queue;

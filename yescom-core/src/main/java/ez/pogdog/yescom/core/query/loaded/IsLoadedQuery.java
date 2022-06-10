@@ -1,10 +1,10 @@
-package ez.pogdog.yescom.core.query;
+package ez.pogdog.yescom.core.query.loaded;
 
 import ez.pogdog.yescom.api.data.ChunkPosition;
 import ez.pogdog.yescom.api.data.ChunkState;
 import ez.pogdog.yescom.api.data.Dimension;
-import ez.pogdog.yescom.core.connection.Server;
-import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveQuery;
+import ez.pogdog.yescom.core.query.IQuery;
+import ez.pogdog.yescom.core.query.IQueryHandle;
 
 import java.util.Objects;
 
@@ -29,7 +29,12 @@ public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQue
 		this.dimension = dimension;
 		this.expected = expected;
 		this.priority = priority;
-		this.expiry = System.currentTimeMillis() + expiry;
+
+		if (expiry < 0) {
+			this.expiry = -1;
+		} else {
+			this.expiry = System.currentTimeMillis() + expiry;
+		}
 	}
 
 	@Override
@@ -61,7 +66,7 @@ public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQue
 
 	@Override
 	public boolean isExpired() {
-		return System.currentTimeMillis() <= expiry;
+		return expiry > 0 && System.currentTimeMillis() <= expiry;
 	}
 
 	/**
@@ -75,6 +80,6 @@ public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQue
 	 * Query priority.
 	 */
 	public enum Priority {
-		LOW, MEDIUM, HIGH;
+		LOWEST, LOW, MEDIUM, HIGH, HIGHEST;
 	}
 }

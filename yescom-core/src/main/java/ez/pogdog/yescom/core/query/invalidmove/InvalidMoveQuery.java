@@ -5,7 +5,7 @@ import ez.pogdog.yescom.api.data.ChunkState;
 import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.query.IQuery;
 import ez.pogdog.yescom.core.query.IQueryHandle;
-import ez.pogdog.yescom.core.query.IsLoadedQuery;
+import ez.pogdog.yescom.core.query.loaded.IsLoadedQuery;
 
 public class InvalidMoveQuery extends IsLoadedQuery<InvalidMoveHandle> {
 
