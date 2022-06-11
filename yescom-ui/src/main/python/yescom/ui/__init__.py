@@ -81,7 +81,10 @@ def main(args: List[str], jar_path: str) -> None:
     init_loop.exec()
 
     splash_screen.movie.stop()
-    os.remove(splash_gif)  # Clean up early
+    try:
+        os.remove(splash_gif)  # Clean up early
+    except PermissionError:
+        ...
 
     main_window = MainWindow()
     main_window.resize(int(screen.width() / 2), int(screen.height() / 2))
