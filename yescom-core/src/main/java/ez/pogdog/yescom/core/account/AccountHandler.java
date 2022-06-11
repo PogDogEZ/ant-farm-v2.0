@@ -27,7 +27,7 @@ public class AccountHandler {
     private final Set<IAccount> accounts = Collections.synchronizedSet(new HashSet<>());
     private final Set<IAccount> firstTime = new HashSet<>();
     private final Pattern accountPattern = Pattern.compile(
-            "((?<type>(mojang|microsoft))( *):)?( *)(?<email>\\w+@(\\w+\\.\\w+)+)( *):( *)(?<password>\\w+)"
+            "((?<type>(mojang|microsoft))( *):)?( *)(?<email>\\w+@(\\w+\\.\\w+)+)( *):( *)(?<password>.+)"
     );
 
     private final String accountsFile;
