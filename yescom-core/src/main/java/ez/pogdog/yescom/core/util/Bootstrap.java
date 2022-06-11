@@ -36,6 +36,6 @@ public class Bootstrap {
             jarPath = pathBuilder.toString();
         }
 
-        return jarPath.replaceFirst("/+$", "");
+        return jarPath.replaceFirst("/+", "");
     }
 }
