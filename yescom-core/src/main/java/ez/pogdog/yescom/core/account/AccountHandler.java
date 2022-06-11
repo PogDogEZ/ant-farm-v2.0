@@ -10,6 +10,7 @@ import ez.pogdog.yescom.core.account.accounts.Mojang;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -23,7 +24,7 @@ public class AccountHandler {
 
     private final Logger logger = Logging.getLogger("yescom.core.account");
 
-    private final Set<IAccount> accounts = new HashSet<>();
+    private final Set<IAccount> accounts = Collections.synchronizedSet(new HashSet<>());
     private final Set<IAccount> firstTime = new HashSet<>();
     private final Pattern accountPattern = Pattern.compile(
             "((?<type>(mojang|microsoft))( *):)?( *)(?<email>\\w+@(\\w+\\.\\w+)+)( *):( *)(?<password>\\w+)"

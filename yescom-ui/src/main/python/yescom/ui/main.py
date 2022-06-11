@@ -102,9 +102,10 @@ class MainWindow(QMainWindow):
     new_player_cached = pyqtSignal(object)
     trust_state_changed = pyqtSignal(object)
     any_player_joined = pyqtSignal(object)
-    any_player_left = pyqtSignal(object)
+    any_player_death = pyqtSignal(object)
     any_player_gamemode_update = pyqtSignal(object)
     any_player_ping_update = pyqtSignal(object)
+    any_player_left = pyqtSignal(object)
 
     # ------------------------------ Properties ------------------------------ #
 
@@ -216,9 +217,10 @@ class MainWindow(QMainWindow):
         emitters.ON_NEW_PLAYER_CACHED.connect(self.new_player_cached.emit)
         emitters.ON_TRUST_STATE_CHANGED.connect(self.trust_state_changed.emit)
         emitters.ON_ANY_PLAYER_JOIN.connect(self.any_player_joined.emit)
-        emitters.ON_ANY_PLAYER_LEAVE.connect(self.any_player_left.emit)
         emitters.ON_ANY_PLAYER_GAMEMODE_UPDATE.connect(self.any_player_gamemode_update.emit)
         emitters.ON_ANY_PLAYER_PING_UPDATE.connect(self.any_player_ping_update.emit)
+        emitters.ON_ANY_PLAYER_DEATH.connect(self.any_player_death.emit)
+        emitters.ON_ANY_PLAYER_LEAVE.connect(self.any_player_left.emit)
 
     def _setup_top_bar(self, main_layout: QVBoxLayout) -> None:
         logger.fine("Setting up top bar...")

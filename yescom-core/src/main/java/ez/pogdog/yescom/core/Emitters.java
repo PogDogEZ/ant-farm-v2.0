@@ -129,6 +129,11 @@ public class Emitters {
     /* ------------------------------ Server ------------------------------ */
 
     /**
+     * Fired when a new server is added.
+     */
+    public static final Emitter<Server> ON_SERVER_ADDED = new Emitter<>(Server.class);
+
+    /**
      * Fired when we've just connected to a server.
      */
     public static final Emitter<Server> ON_CONNECTION_ESTABLISHED = new Emitter<>(Server.class);

@@ -123,7 +123,7 @@ public class UIConfig implements IConfig {
         public final Option<Vector<Integer>> WHITE_COLOUR = new Option<>(
                 "White colour",
                 "The white colour to use for chat messages.",
-                new Vector<>(Arrays.asList(255, 255, 255))
+                new Vector<>(Arrays.asList(23, 20, 33))
         );
 
         public ChatConfig() {
