@@ -4,6 +4,9 @@ Welcome to **Ant Farm v2.0**, a sequel to the critically acclaimed **Ant Farm v1
 
 ![image](images/ant_farm_logo.png)
 
+## Building
+See [BUILDING.md](BUILDING.md) for instructions on how to build.
+
 ## Gameplay
 In **Ant Farm v2.0**, you play as an ant who must navigate through a dangerous world filled with obstacles and enemies.  
 To succeed, you must use your wits and agility to **follow** pheromone trails and **crush** rival ant hills.  
