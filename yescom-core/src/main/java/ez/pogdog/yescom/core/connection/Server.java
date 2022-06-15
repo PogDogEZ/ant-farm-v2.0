@@ -207,6 +207,7 @@ public class Server implements IConfig, ITickable {
     public void tick() {
         Set<IAccount> accounts = yesCom.accountHandler.getAccounts();
         if (!accounts.isEmpty()) {
+            int loggedIn = 0;
             // logger.finer(String.format("Adding %d account(s) to %s:%d...", accounts.size(), hostname, port));
             outer: for (IAccount account : accounts) { // FIXME: Way too slow, some sort of emitter?
                 for (Player player : players) {
@@ -215,10 +216,13 @@ public class Server implements IConfig, ITickable {
 
                 try {
                     addPlayer(new Player(this, account));
+                    ++loggedIn;
                 } catch (RequestException error) {
                     logger.warning(String.format("Failed to add account %s to %s:%d: %s.", account, hostname, port, error.getMessage()));
                     logger.throwing(getClass().getSimpleName(), "onAccountAdded", error);
                 }
+
+                if (loggedIn > 2) break; // Login max 2 accounts per tick
             }
         }
         // logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));

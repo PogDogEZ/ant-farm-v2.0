@@ -11,7 +11,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -24,7 +26,7 @@ public class AccountHandler {
 
     private final Logger logger = Logging.getLogger("yescom.core.account");
 
-    private final Set<IAccount> accounts = Collections.synchronizedSet(new HashSet<>());
+    private final Map<IAccount, Long> accounts = Collections.synchronizedMap(new HashMap<>());
     private final Set<IAccount> firstTime = new HashSet<>();
     private final Pattern accountPattern = Pattern.compile(
             "((?<type>(mojang|microsoft))( *):)?( *)(?<email>\\w+@(\\w+\\.\\w+)+)( *):( *)(?<password>.+)"
@@ -62,7 +64,8 @@ public class AccountHandler {
                     account = new Microsoft(email, password);
                 }
 
-                accounts.add(account);
+                addAccount(account);
+                // accounts.put(account, System.currentTimeMillis() - 40000);
             }
         }
 
@@ -72,7 +75,18 @@ public class AccountHandler {
     /* ------------------------------ Managing accounts ------------------------------ */
 
     public Set<IAccount> getAccounts() {
-        return accounts;
+        return accounts.keySet();
+    }
+
+    /**
+     * @return The {@link IAccount}s available for login right now.
+     */
+    public Set<IAccount> getAvailableAccounts() {
+        Set<IAccount> available = new HashSet<>();
+        for (Map.Entry<IAccount, Long> entry : accounts.entrySet()) {
+            if (System.currentTimeMillis() - entry.getValue() > 30000) available.add(entry.getKey());
+        }
+        return available;
     }
 
     /**
@@ -80,8 +94,8 @@ public class AccountHandler {
      * @param account The account to add.
      */
     public void addAccount(IAccount account) {
-        if (!accounts.contains(account)) {
-            accounts.add(account);
+        if (!accounts.containsKey(account)) {
+            accounts.put(account, System.currentTimeMillis() - 40000);
             firstTime.add(account);
         }
     }
@@ -91,14 +105,14 @@ public class AccountHandler {
      * @param account The account to remove.
      */
     public void removeAccount(IAccount account) {
-        if (accounts.contains(account)) {
+        if (accounts.containsKey(account)) {
             accounts.remove(account);
             Emitters.ON_ACCOUNT_REMOVED.emit(account);
         }
     }
 
     public boolean hasAccount(IAccount account) {
-        return accounts.contains(account);
+        return accounts.containsKey(account);
     }
 
     /**
@@ -114,7 +128,10 @@ public class AccountHandler {
      * @param authService The auth service to log it in to.
      */
     public void login(IAccount account, AuthenticationService authService) throws RequestException {
+        if (accounts.getOrDefault(account, System.currentTimeMillis() - 40000) < 30000) return;
+
         try {
+            accounts.put(account, System.currentTimeMillis());
             account.login(authService);
             // Fire this if the account was successfully logged in for the first time
             if (firstTime.contains(account)) Emitters.ON_ACCOUNT_ADDED.emit(account);

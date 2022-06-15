@@ -39,11 +39,15 @@ public class Mojang implements IAccount {
             authService.setUsername(email);
             authService.setPassword(password);
 
+            String email = this.email;
+
             String[] emailSplit = email.split("@");
-            String email = String.valueOf(emailSplit[0].charAt(0));
-            email += emailSplit[0].substring(1, emailSplit[0].length() - 1).replaceAll("\\w", "*");
-            email += String.valueOf(emailSplit[0].charAt(emailSplit[0].length() - 1));
-            if (emailSplit.length > 1) email += "@" + emailSplit[1];
+            if (emailSplit[0].length() >= 3) {
+                email = String.valueOf(emailSplit[0].charAt(0));
+                email += emailSplit[0].substring(1, emailSplit[0].length() - 1).replaceAll("\\w", "*");
+                email += String.valueOf(emailSplit[0].charAt(emailSplit[0].length() - 1));
+                if (emailSplit.length > 1) email += "@" + emailSplit[1];
+            }
             logger.fine(String.format("Authenticating Mojang account %s.", email));
         }
         authService.login();
