@@ -119,6 +119,10 @@ public class PlayersHandler implements IConfig {
         return info;
     }
 
+    public PlayerInfo getInfo(UUID uuid, String username) {
+        return getInfo(uuid, username, null, -1, null);
+    }
+
     public PlayerInfo getInfo(UUID uuid) {
         return getInfo(uuid, null, null, -1, null);
     }

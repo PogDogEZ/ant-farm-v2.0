@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import datetime
-from typing import List, Set, Tuple
+from typing import List, Set, Tuple, Union
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -13,6 +13,8 @@ from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
 from ez.pogdog.yescom.api.data.player import PlayerInfo, Session
 from ez.pogdog.yescom.api.data.player.death import Death, Kill
+from ez.pogdog.yescom.core import Emitters
+from ez.pogdog.yescom.core.connection import Server
 
 logger = Logging.getLogger("yescom.ui.dialogs.player_info")
 
@@ -25,12 +27,12 @@ class PlayerInfoDialog(QDialog):
     def __init__(self, parent: QWidget, info: PlayerInfo) -> None:
         super().__init__(parent)
 
+        self.yescom = YesCom.getInstance()
+        self.main_window = MainWindow.INSTANCE
+
         self.info = info
 
         logger.fine("New player info dialog.")
-
-        self.yescom = YesCom.getInstance()
-        self.main_window = MainWindow.INSTANCE
 
         self.setWindowTitle("Player info - %s" % info.username)
         self.setWindowModality(Qt.ApplicationModal)
@@ -80,6 +82,7 @@ class PlayerInfoDialog(QDialog):
         self.trusted_check_box.stateChanged.connect(self._on_trusted_checkbox_state_changed)
         info_layout.addWidget(self.trusted_check_box, 2, 1, 1, 1)
 
+        info_layout.setColumnStretch(1, 1)
         main_layout.addLayout(info_layout)
 
         self.servers_label = QLabel(self)
@@ -140,31 +143,30 @@ class PlayerInfoDialog(QDialog):
 
     # ------------------------------ Classes ------------------------------ #
 
-    class SessionsItem(QTreeWidgetItem):
+    class SessionsDialog:
         """
         Displays information about sessions the player has on a given server.
         """
 
-        def __init__(self, parent: QTreeWidget, info: PlayerInfo, sessions: List[Session]) -> None:
-            # If a player has connected to this server, they will have sessions no matter what
-            super().__init__(parent, ["Sessions (%i):" % len(sessions)])
+        def __init__(self, parent: "PlayerInfoDialog.ServerTab", info: PlayerInfo, sessions: List[Session]) -> None:
+            super().__init__(parent)
 
-            self.info = info
+            self.player_info = info
 
-            self.setToolTip(0, "The number of sessions this player has had on this server.")
+            self.setToolTip("The sessions this player has had on this server.")
 
             # TODO: Selectable date for between
-            for session in sorted(sessions, key=lambda session: session.start):
-                start = str(datetime.datetime.fromtimestamp(session.start // 1000))
-                end = str(datetime.datetime.fromtimestamp(session.end // 1000))
-                play_time = str(datetime.timedelta(seconds=session.getPlayTime() // 1000))
+            # for session in sorted(sessions, key=lambda session: session.start):
+            #     start = str(datetime.datetime.fromtimestamp(session.start // 1000))
+            #     end = str(datetime.datetime.fromtimestamp(session.end // 1000))
+            #     play_time = str(datetime.timedelta(seconds=session.getPlayTime() // 1000))
 
-                session_item = QTreeWidgetItem(self, ["Session on %s" % start])
-                session_item.addChild(QTreeWidgetItem(session_item, ["Start:", start]))
-                session_item.addChild(QTreeWidgetItem(session_item, ["End:", end]))
-                session_item.addChild(QTreeWidgetItem(session_item, ["Played:", play_time]))
+            #     session_item = QTreeWidgetItem(self, ["Session on %s" % start])
+            #     session_item.addChild(QTreeWidgetItem(session_item, ["Start:", start]))
+            #     session_item.addChild(QTreeWidgetItem(session_item, ["End:", end]))
+            #     session_item.addChild(QTreeWidgetItem(session_item, ["Played:", play_time]))
 
-                self.addChild(session_item)
+            #     self.addChild(session_item)
 
     class DeathsItem(QTreeWidgetItem):
         """
@@ -232,20 +234,24 @@ class PlayerInfoDialog(QDialog):
             super().__init__(parent)
 
             self.yescom = YesCom.getInstance()
+            self.main_window = MainWindow.INSTANCE
 
-            self.info = info
-            self.server = server
+            self.player_info = info
+            self.server_info = server
+
+            self.server: Union[Server, None] = None
+
             self.sessions = []
             self.deaths = []
             self.kills = []
 
-            self.total_play_time = 0
+            self.sessions_play_time = 0
             self.current_session_start = -1
-            self.current_session_play_time = -1
+            self.current_session_play_time = 0
 
             for session in sessions:  # Find the sessions that apply only to this server
                 if session.server == server:
-                    self.total_play_time += session.getPlayTime()
+                    self.sessions_play_time += session.getPlayTime()
                     self.sessions.append(session)
 
             for death in deaths:
@@ -258,43 +264,68 @@ class PlayerInfoDialog(QDialog):
 
             for server_ in self.yescom.servers:
                 if server_.serverInfo == server:
+                    self.server = server_
+
                     if server_.isOnline(info.uuid):
                         self.current_session_start = server_.getSessionStartTime(info.uuid)
                         self.current_session_play_time = server_.getSessionPlayTime(info.uuid)
-                        self.total_play_time += self.current_session_play_time
 
             self._setup_tab()
+
+            self.main_window.tick.connect(self._on_tick)
+
+            # self.main_window.any_player_joined.connect(self._on_any_player_joined)
+            self.main_window.any_player_left.connect(self._on_any_player_left)
+            self.main_window.any_player_death.connect(self._on_any_player_death)
 
         def _setup_tab(self) -> None:
             main_layout = QVBoxLayout(self)
 
-            self.info_tree = QTreeWidget(self)
-            self.info_tree.setHeaderHidden(True)
-            self.info_tree.setColumnCount(2)
-            main_layout.addWidget(self.info_tree)
+            self.total_play_time_label = QLabel(self)
+            self.total_play_time_label.setText(
+                "Total play time: " + str(datetime.timedelta(seconds=(self.sessions_play_time + self.current_session_play_time) // 1000)),
+            )
+            main_layout.addWidget(self.total_play_time_label)
 
-            self.info_tree.addTopLevelItem(QTreeWidgetItem(
-                self.info_tree, ["Total play time: " + str(datetime.timedelta(seconds=self.total_play_time // 1000))],
-            ))
+            self.total_deaths_label = QLabel(self)
+            self.total_deaths_label.setText("Total deaths: " + str(len(self.deaths)))
+            main_layout.addWidget(self.total_deaths_label)
 
-            if self.current_session_start > 0:
-                start = str(datetime.datetime.fromtimestamp(self.current_session_start // 1000))
-                play_time = str(datetime.timedelta(seconds=self.current_session_play_time // 1000))
+            self.total_kills_label = QLabel(self)
+            self.total_kills_label.setText("Total kills: " + str(len(self.kills)))
+            main_layout.addWidget(self.total_kills_label)
 
-                session_item = QTreeWidgetItem(self.info_tree, ["Current session"])
-                session_item.addChild(QTreeWidgetItem(session_item, ["Start:", start]))
-                session_item.addChild(QTreeWidgetItem(session_item, ["Played:", play_time]))
+            # self.sessions_dialog = PlayerInfoDialog.SessionsDialog(self, self.player_info, self.sessions)
+            # main_layout.addWidget(self.sessions_dialog)
 
-                self.info_tree.addTopLevelItem(session_item)
+        # ------------------------------ Events ------------------------------ #
 
-            if self.sessions:
-                self.info_tree.addTopLevelItem(PlayerInfoDialog.SessionsItem(self.info_tree, self.info, self.sessions))
-            if self.deaths:
-                self.info_tree.addTopLevelItem(PlayerInfoDialog.DeathsItem(self.info_tree, self.info, self.deaths))
-            if self.kills:
-                self.info_tree.addTopLevelItem(PlayerInfoDialog.KillsItem(self.info_tree, self.info, self.kills))
+        def _on_tick(self) -> None:
+            if self.server.isOnline(self.player_info.uuid):
+                self.current_session_start = self.server.getSessionStartTime(self.player_info.uuid)
+                self.current_session_play_time = self.server.getSessionPlayTime(self.player_info.uuid)
 
-            self.info_tree.resizeColumnToContents(0)
+            self.total_play_time_label.setText(
+                "Total play time: " + str(datetime.timedelta(seconds=(self.sessions_play_time + self.current_session_play_time) // 1000)),
+            )
+            self.total_deaths_label.setText("Total deaths: " + str(len(self.deaths)))
+            self.total_kills_label.setText("Total kills: " + str(len(self.kills)))
+
+        # def _on_any_player_joined(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
+        #     if online_player_info.info == self.player_info and online_player_info.server == self.server:
+        #         ...
+
+        def _on_any_player_left(self, online_player_info: Emitters.OnlinePlayerInfo) -> None:
+            if online_player_info.info == self.player_info and online_player_info.server == self.server:
+                for session in self.player_info.sessions:  # We should have just gotten the new session
+                    if not session in self.sessions:
+                        self.sessions_play_time += session.getPlayTime()
+                        self.sessions.append(session)
+
+        def _on_any_player_death(self, online_player_death: Emitters.OnlinePlayerDeath) -> None:
+            if online_player_death.info == self.player_info and online_player_death.server == self.server:
+                if not online_player_death.death in self.deaths:
+                    self.deaths.append(online_player_death.death)
 
 
 from ..main import MainWindow

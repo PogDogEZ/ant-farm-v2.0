@@ -9,6 +9,27 @@ import java.util.Vector;
 
 public class UIConfig implements IConfig {
 
+    /* ------------------------------ Settings ------------------------------ */
+
+    public final Option<Vector<Integer>> TRUSTED_COLOUR = new Option<>(
+            "Trusted colour",
+            "The colour to highlight the names of players that are trusted (RGB).",
+            new Vector<>(Arrays.asList(0, 117, 163))
+    );
+    public final Option<Vector<Integer>> ONLINE_COLOUR = new Option<>(
+            "Online colour",
+            "The colour to highlight the names of accounts that are online (RGB).",
+            new Vector<>(Arrays.asList(0, 128, 0))
+    );
+    public final Option<Vector<Integer>> OFFLINE_COLOUR = new Option<>(
+            "Offline colour",
+            "The colour to highlight the names of accounts that are offline (RGB).",
+            new Vector<>(Arrays.asList(200, 0, 0))
+    );
+
+
+    /* ------------------------------ Children ------------------------------ */
+
     public final ChatConfig chat;
     public final RendererConfig renderer;
 

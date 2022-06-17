@@ -205,7 +205,7 @@ public class Server implements IConfig, ITickable {
      */
     @Override
     public void tick() {
-        Set<IAccount> accounts = yesCom.accountHandler.getAccounts();
+        Set<IAccount> accounts = yesCom.accountHandler.getAvailableAccounts();
         if (!accounts.isEmpty()) {
             int loggedIn = 0;
             // logger.finer(String.format("Adding %d account(s) to %s:%d...", accounts.size(), hostname, port));

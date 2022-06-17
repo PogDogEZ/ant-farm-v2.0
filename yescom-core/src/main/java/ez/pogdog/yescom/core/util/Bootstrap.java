@@ -36,6 +36,8 @@ public class Bootstrap {
             jarPath = pathBuilder.toString();
         }
 
-        return jarPath.replaceFirst("/+", "");
+        // Mhmmmmmmmmmmmmmmmmm
+        if (System.getProperty("os.name").startsWith("win")) jarPath = jarPath.replaceFirst("/+", "");
+        return jarPath;
     }
 }

@@ -8,7 +8,7 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
-from ..dialogs.player_info import PlayerInfoDialog
+from ..widgets.players import AbstractPlayersTree, OfflinePlayersTree
 
 from java.util import UUID
 
@@ -37,27 +37,14 @@ class PlayersTab(QWidget):
 
         self._processing_account: Union[IAccount, None] = None
 
+        self._setup_tab()
+
         self.main_window.server_changed.connect(self._on_server_changed)
         self.main_window.connection_established.connect(self._on_server_changed)
         self.main_window.connection_lost.connect(self._on_server_changed)
 
         self.main_window.account_added.connect(self._on_account_added)
         self.main_window.account_error.connect(self._on_account_error)
-
-        self.main_window.player_added.connect(self._on_player_added)
-        self.main_window.player_removed.connect(self._on_player_removed)
-
-        self.main_window.new_player_cached.connect(self._on_new_player_cached)
-
-        self._setup_tab()
-
-        for server in self.yescom.servers:  # Players from accounts.txt will already exist by now, so need to add them
-            for player in server.getPlayers():
-                self._on_player_added(player)
-
-        # Also need to add the already-cached players
-        for info in self.yescom.playersHandler.getPlayerCache().values():
-            self._on_new_player_cached(info, skip_check=True)  # No need to check for duplicates here
 
     def __repr__(self) -> str:
         return "<PlayersTab() at %x>" % id(self)
@@ -124,7 +111,7 @@ class PlayersTab(QWidget):
 
         players_layout = QVBoxLayout()
 
-        self.players_tree = PlayersTab.PlayersTree(self)
+        self.players_tree = OfflinePlayersTree(self)
         players_layout.addWidget(self.players_tree)
 
         # manage_players = QPushButton(self)
@@ -137,11 +124,6 @@ class PlayersTab(QWidget):
     # ------------------------------ Events ------------------------------ #
 
     def _on_server_changed(self) -> None:
-        count = 0
-        if self.main_window.current_server is not None:
-            count = len(self.main_window.current_server.getPlayers())
-
-        self.accounts_tree.setHeaderLabels(["Accounts (%i):" % count, ""])
         self.disconnect_all_button.setEnabled(
             self.main_window.current_server is not None and self.main_window.current_server.isConnected()
         )
@@ -157,7 +139,7 @@ class PlayersTab(QWidget):
             self.password_edit.setEnabled(True)
             self.password_edit.clear()
 
-            QApplication.restoreOverrideCursor()
+            self.setCursor(Qt.ArrowCursor)
 
     def _on_account_error(self, account_error: Emitters.AccountError) -> None:
         if account_error.account == self._processing_account:
@@ -172,30 +154,7 @@ class PlayersTab(QWidget):
             self.password_edit.setEnabled(True)
             self.password_edit.clear()
 
-            QApplication.restoreOverrideCursor()
-
-    def _on_player_added(self, player: Player) -> None:
-        for top_level_index in range(self.accounts_tree.topLevelItemCount()):
-            if player == self.accounts_tree.topLevelItem(top_level_index).player:
-                return
-        self._on_server_changed()  # Update label
-        self.accounts_tree.addTopLevelItem(PlayersTab.AccountItem(self.accounts_tree, player))
-
-    def _on_player_removed(self, player: Player) -> None:
-        for top_level_index in range(self.accounts_tree.topLevelItemCount()):
-            if player == self.accounts_tree.topLevelItem(top_level_index).player:
-                self._on_server_changed()
-                self.accounts_tree.takeTopLevelItem(top_level_index)
-                return
-
-    def _on_new_player_cached(self, info: PlayerInfo, skip_check: bool = False) -> None:
-        if not skip_check:
-            # Should hopefully happen less often as the number of players increases
-            for top_level_index in range(self.players_tree.topLevelItemCount()):
-                if info == self.players_tree.topLevelItem(top_level_index).info:
-                    return
-        self.players_tree.setHeaderLabels(["All players (%i):" % len(self.yescom.playersHandler.getPlayerCache()), ""])
-        self.players_tree.addTopLevelItem(PlayersTab.PlayerItem(self.players_tree, info))
+            self.setCursor(Qt.ArrowCursor)
 
     def _on_username_changed(self, text: str) -> None:
         self.mojang_login_button.setEnabled(len(text) > 3 and len(self.password_edit.text()) > 3)
@@ -217,7 +176,7 @@ class PlayersTab(QWidget):
             self.mojang_login_button.setEnabled(False)
             self.microsoft_login_button.setEnabled(False)
 
-            QApplication.setOverrideCursor(Qt.WaitCursor)
+            self.setCursor(Qt.WaitCursor)
             self.yescom.accountHandler.addAccount(self._processing_account)
 
     def _on_microsoft_login(self, checked: bool) -> None:
@@ -232,7 +191,7 @@ class PlayersTab(QWidget):
             self.mojang_login_button.setEnabled(False)
             self.microsoft_login_button.setEnabled(False)
 
-            QApplication.setOverrideCursor(Qt.WaitCursor)
+            self.setCursor(Qt.WaitCursor)
             self.yescom.accountHandler.addAccount(self._processing_account)
 
     # ------------------------------ Public methods ------------------------------ #
@@ -244,10 +203,10 @@ class PlayersTab(QWidget):
         :param player: The player to select.
         """
 
-        for top_level_index in range(self.accounts_tree.topLevelItemCount()):
-            item = self.accounts_tree.topLevelItem(top_level_index)
-            if item.player == player:
-                self.accounts_tree.setCurrentIndex(self.accounts_tree.indexFromItem(item))
+        for index in range(self.accounts_tree.topLevelItemCount()):
+            top_level_item = self.accounts_tree.topLevelItem(index)
+            if isinstance(top_level_item, PlayersTab.AccountItem) and top_level_item.player == player:
+                self.accounts_tree.setCurrentIndex(self.accounts_tree.indexFromItem(top_level_item))
                 return
 
     def expand_account(self, player: Player) -> None:
@@ -257,136 +216,64 @@ class PlayersTab(QWidget):
         :param player: The player whose menu to expand.
         """
 
-        for top_level_index in range(self.accounts_tree.topLevelItemCount()):
-            item = self.accounts_tree.topLevelItem(top_level_index)
-            if item.player == player:
-                self.accounts_tree.expand(self.accounts_tree.indexFromItem(item))
+        for index in range(self.accounts_tree.topLevelItemCount()):
+            top_level_item = self.accounts_tree.topLevelItem(index)
+            if isinstance(top_level_item, PlayersTab.AccountItem) and top_level_item.player == player:
+                self.accounts_tree.expand(self.accounts_tree.indexFromItem(top_level_item))
                 return
 
     # ------------------------------ Classes ------------------------------ #
 
-    class AccountsTree(QTreeWidget):
+    class AccountsTree(AbstractPlayersTree):
         """
         Stores players in a tree view.
         """
 
         def __init__(self, parent: "PlayersTab") -> None:
-            super().__init__(parent)
+            super().__init__(parent, label="Accounts")
 
             self.yescom = YesCom.getInstance()
             self.main_window = MainWindow.INSTANCE
 
-            self.dirty = False
             self._connect_thread: Union[PlayersTab.ConnectThread, None] = None
 
-            self.setColumnCount(2)
-            self.setHeaderLabels(["Accounts (0):", ""])
-            self.setToolTip("Accounts that we own and can use.")
-
-            self.itemChanged.connect(lambda item: self._set_dirty())
-
-            self.main_window.tick.connect(self._on_tick)
-
-            self.resizeColumnToContents(0)
+            self.main_window.player_added.connect(self._on_player_added)
+            self.main_window.player_removed.connect(self._on_player_removed)
 
         # ------------------------------ Events ------------------------------ #
 
-        def contextMenuEvent(self, event: QContextMenuEvent) -> None:
-            current = self.currentItem()
-            if current is None:
-                return
+        def _on_player_added(self, player: Player) -> None:
+            for index in range(self.topLevelItemCount()):
+                top_level_item = self.topLevelItem(index)
+                if isinstance(top_level_item, PlayersTab.AccountItem) and player == top_level_item.player:
+                    return
+            self.addTopLevelItem(PlayersTab.AccountItem(
+                self, self.yescom.playersHandler.getInfo(player.getUUID(), player.getUsername()), player,
+            ))
+            self._update_count()
 
-            menu = QMenu()
-            clipboard = QApplication.clipboard()
-
-            if isinstance(current, PlayersTab.AccountItem):
-                player = current.player
-            elif isinstance(current.parent(), PlayersTab.AccountItem):
-                player = current.parent().player
-            else:
-                logger.warning("Don't know how to handle item %s." % current)
-                return
-
-            # TODO: Proper options integration?
-            auto_reconnect = menu.addAction("Auto reconnect", lambda: self._toggle(player.AUTO_RECONNECT))
-            auto_reconnect.setCheckable(True)
-            auto_reconnect.setChecked(player.AUTO_RECONNECT.value)
-            # auto_reconnect.setToolTip("Allow this player to automatically reconnect.")
-
-            disable_auto_reconnect_on_auto_logout = menu.addAction(  # TODO: Might need a better name tbh
-                "Disable on autolog",
-                lambda: self._toggle(player.DISABLE_AUTO_RECONNECT_ON_LOGOUT),
-            )
-            disable_auto_reconnect_on_auto_logout.setCheckable(True)
-            disable_auto_reconnect_on_auto_logout.setChecked(player.DISABLE_AUTO_RECONNECT_ON_LOGOUT.value)
-
-            menu.addSeparator()  # To make clear that the above are exclusive to each other
-
-            connect = menu.addAction("Connect", lambda: self._connect(player))
-            connect.setEnabled(self._connect_thread is None and not player.isConnected())
-            # connect.setToolTip("Connects this player to the currently selected server.")
-
-            disconnect = menu.addAction("Disconnect", lambda: player.disconnect("User disconnect"))
-            disconnect.setEnabled(player.isConnected())
-            # disconnect.setToolTip("Disconnects this player from the currently selected server.")
-
-            remove = menu.addAction("Remove", lambda: self._remove(player))
-            remove.setEnabled(player.server.hasPlayer(player))
-            # remove.setEnabled(self.yescom.accountHandler.hasAccount(player.account))
-            # remove.setToolTip("Removes this player's account from the account cache.")
-
-            menu.addSeparator()
-
-            menu.addAction("Copy username", lambda: clipboard.setText(player.getUsername()))
-            menu.addAction("Copy UUID", lambda: clipboard.setText(str(player.getUUID())))
-
-            menu.addSeparator()
-
-            copy_coords = menu.addAction(
-                "Copy coords",
-                lambda: clipboard.setText("%.1f, %.1f, %.1f" % (
-                    player.getPosition().getX(),
-                    player.getPosition().getY(),
-                    player.getPosition().getZ(),
-                )),
-            )
-            copy_coords.setEnabled(player.isConnected())
-            copy_angle = menu.addAction(
-                "Copy angle",
-                lambda: clipboard.setText("%.1f, %.1f" % (
-                    player.getAngle().getYaw(),
-                    player.getAngle().getPitch(),
-                )),
-            )
-            copy_angle.setEnabled(player.isConnected())
-            copy_dimension = menu.addAction(
-                "Copy dimension",
-                lambda: clipboard.setText(str(player.getDimension()).lower()),
-            )
-            copy_dimension.setEnabled(player.isConnected())
-
-            # TODO: Goto player, view disconnect logs, view chat
-
-            menu.exec(event.globalPos())
-
-        def _on_tick(self) -> None:
-            if self.dirty:
-                self.resizeColumnToContents(0)
-                self.dirty = False
+        def _on_player_removed(self, player: Player) -> None:
+            for index in range(self.topLevelItemCount()):
+                top_level_item = self.topLevelItem(index)
+                if isinstance(top_level_item, PlayersTab.AccountItem) and player == top_level_item.player:
+                    self.takeTopLevelItem(index)
+                    break
+            self._update_count()
 
         def _on_connect(self) -> None:
             player = self._connect_thread.player
             self._connect_thread = None
-            QApplication.restoreOverrideCursor()
+            self.parent().setCursor(Qt.ArrowCursor)
 
             if not player.isConnected():
-                QMessageBox.warning(self, "Couldn't connect", "Couldn't connect player %r to %s:%i." %
-                                          (player.getUsername(), player.server.hostname, player.server.port))
+                QMessageBox.warning(
+                    self,
+                    "Couldn't connect", "Couldn't connect player %r to %s:%i." % (
+                        player.getUsername(), player.server.hostname, player.server.port,
+                    ),
+                )
 
         # ------------------------------ Utility methods ------------------------------ #
-
-        def _set_dirty(self) -> None:
-            self.dirty = True
 
         def _toggle(self, option: Option) -> None:
             """
@@ -401,7 +288,7 @@ class PlayersTab(QWidget):
             """
 
             if self._connect_thread is None and not player.isConnected():
-                QApplication.setOverrideCursor(Qt.WaitCursor)
+                self.parent().setCursor(Qt.WaitCursor)
                 self._connect_thread = PlayersTab.ConnectThread(self, player)
                 self._connect_thread.finished.connect(self._on_connect)
                 self._connect_thread.start()
@@ -419,75 +306,32 @@ class PlayersTab(QWidget):
             player.server.removePlayer(player)
             QMessageBox.information(self, "Success", "The player %r's account has been removed." % player.getUsername())
 
-    class AccountItem(QTreeWidgetItem):
+    class AccountItem(AbstractPlayersTree.AbstractPlayerItem):
         """
         Information about an account / player that we "control".
         """
 
-        connected_tooltip = "%s\nServer: %s:%i\nConnected: %%s\nTPS: %%.1ftps\nPing: %%ims\nHealth: %%.1f\nRight click for more options."
-        disconnected_tooltip = "%s\nServer: %s:%i\nConnected: %%s\nRight click for more options."
+        # connected_tooltip = "%s\nServer: %s:%i\nConnected: %%s\nTPS: %%.1ftps\nPing: %%ims\nHealth: %%.1f\nRight click for more options."
+        # disconnected_tooltip = "%s\nServer: %s:%i\nConnected: %%s\nRight click for more options."
 
-        def __init__(self, parent: "PlayersTab.AccountsTree", player: Player):
-            super().__init__(parent)
+        def __init__(self, parent: "PlayersTab.AccountsTree", info: PlayerInfo, player: Player):
+            super().__init__(parent, info)
 
             self.yescom = YesCom.getInstance()
             self.main_window = MainWindow.INSTANCE
 
+            self.parent_ = parent  # Need to keep a reference of this ourselves, I guess, thanks Qt
             self.player = player
 
-            username = player.getUsername()  # Local lookups are a ton faster
-            uuid = player.getUUID()
-            hostname = player.server.hostname
-            port = player.server.port
+            # self.connected_tooltip = self.connected_tooltip % (
+            #     player.getUsername(), player.server.hostname, player.server.port,
+            # )
+            # self.disconnected_tooltip = self.disconnected_tooltip % (
+            #     player.getUsername(), player.server.hostname, player.server.port,
+            # )
 
-            self.connected_tooltip = self.connected_tooltip % (username, hostname, port)
-            self.disconnected_tooltip = self.disconnected_tooltip % (username, hostname, port)
-
-            self.setText(0, player.getUsername())
-
-            self.main_window.skin_downloader_thread.skin_resolved.connect(self._on_skin_resolved)
-            self.main_window.skin_downloader_thread.request_skin(uuid)
-
-            uuid_child = QTreeWidgetItem(self, ["UUID:", str(uuid)])
-            uuid_child.setToolTip(0, "The player's UUID.")
-            uuid_child.setToolTip(1, str(uuid))
-            self.addChild(uuid_child)
-
-            self.connected_child = QTreeWidgetItem(self, ["Connected:"])
-            self.connected_child.setToolTip(0, "Is the player connected to the server?")
-            self.addChild(self.connected_child)
-
-            self.position_child = QTreeWidgetItem(self, ["Position:"])
-            self.position_child.setToolTip(0, "The current position of the player.")
-            self.addChild(self.position_child)
-            self.angle_child = QTreeWidgetItem(self, ["Angle:"])
-            self.angle_child.setToolTip(0, "The current angle (yaw, pitch) of the player.")
-            self.addChild(self.angle_child)
-            self.dimension_child = QTreeWidgetItem(self, ["Dimension:"])
-            self.dimension_child.setToolTip(0, "The dimension the player is currently in.")
-            self.addChild(self.dimension_child)
             self._on_position_update(player)
-
-            self.health_child = QTreeWidgetItem(self, ["Health:"])
-            self.health_child.setToolTip(0, "The current health of the player.")
-            self.addChild(self.health_child)
-            self.hunger_child = QTreeWidgetItem(self, ["Hunger:"])
-            self.hunger_child.setToolTip(0, "The current hunger level of the player.")
-            self.addChild(self.hunger_child)
-            self.saturation_child = QTreeWidgetItem(self, ["Saturation:"])
-            self.saturation_child.setToolTip(0, "The current saturation level of the player.")
-            self.addChild(self.saturation_child)
             self._on_health_update(player)
-
-            self.tickrate_child = QTreeWidgetItem(self, ["Server tickrate:"])
-            self.tickrate_child.setToolTip(0, "The current TPS that this player estimates the server is running at.")
-            self.addChild(self.tickrate_child)
-            self.ping_child = QTreeWidgetItem(self, ["Server ping:"])
-            self.ping_child.setToolTip(0, "The ping that the server estimates this player has.")
-            self.addChild(self.ping_child)
-            self.chunks_child = QTreeWidgetItem(self, ["Chunks:"])
-            self.chunks_child.setToolTip(0, "The number of chunks in the render distance of this player.")
-            self.addChild(self.chunks_child)
             self._on_server_stats_update(player)
 
             self._on_login(player)
@@ -505,8 +349,115 @@ class PlayersTab(QWidget):
             self.main_window.player_health_update.connect(self._on_health_update)
             self.main_window.player_server_stats_update.connect(self._on_server_stats_update)
 
+            for server in self.yescom.servers:  # Players from accounts.txt will already exist by now, so need to add them
+                for player in server.getPlayers():
+                    self._on_player_added(player)
+
         def __eq__(self, other) -> bool:
             return isinstance(other, PlayersTab.AccountItem) and other.player == self.player
+
+        def _setup(self) -> None:
+            self.connected_child = QTreeWidgetItem(self, ["Connected:"])
+            # self.connected_child.setToolTip(0, "Is the player connected to the server?")
+            self.addChild(self.connected_child)
+
+            self.location_child = QTreeWidgetItem(self, ["Location"])
+            self.position_child = QTreeWidgetItem(self.location_child, ["Position:"])
+            self.position_child.setToolTip(0, "The current position of the player.")
+            self.location_child.addChild(self.position_child)
+            self.angle_child = QTreeWidgetItem(self.location_child, ["Angle:"])
+            self.angle_child.setToolTip(0, "The current angle (yaw, pitch) of the player.")
+            self.location_child.addChild(self.angle_child)
+            self.dimension_child = QTreeWidgetItem(self.location_child, ["Dimension:"])
+            self.dimension_child.setToolTip(0, "The dimension the player is currently in.")
+            self.location_child.addChild(self.dimension_child)
+            self.addChild(self.location_child)
+
+            self.stats_child = QTreeWidgetItem(self, ["Stats"])
+            self.health_child = QTreeWidgetItem(self.stats_child, ["Health:"])
+            self.health_child.setToolTip(0, "The current health of the player.")
+            self.stats_child.addChild(self.health_child)
+            self.hunger_child = QTreeWidgetItem(self.stats_child, ["Hunger:"])
+            self.hunger_child.setToolTip(0, "The current hunger level of the player.")
+            self.stats_child.addChild(self.hunger_child)
+            self.saturation_child = QTreeWidgetItem(self.stats_child, ["Saturation:"])
+            self.saturation_child.setToolTip(0, "The current saturation level of the player.")
+            self.stats_child.addChild(self.saturation_child)
+            self.addChild(self.stats_child)
+
+            self.debug_child = QTreeWidgetItem(self, ["Debug"])
+            self.tickrate_child = QTreeWidgetItem(self.debug_child, ["Server tickrate:"])
+            self.tickrate_child.setToolTip(0, "The current TPS that this player estimates the server is running at.")
+            self.debug_child.addChild(self.tickrate_child)
+            self.ping_child = QTreeWidgetItem(self.debug_child, ["Server ping:"])
+            self.ping_child.setToolTip(0, "The ping that the server estimates this player has.")
+            self.debug_child.addChild(self.ping_child)
+            self.chunks_child = QTreeWidgetItem(self.debug_child, ["Chunks:"])
+            self.chunks_child.setToolTip(0, "The number of chunks in the render distance of this player.")
+            self.debug_child.addChild(self.chunks_child)
+            self.addChild(self.debug_child)
+
+        def apply_to_context_menu(self, context_menu: QMenu) -> None:
+            context_menu.addAction("Manage account...")  # TODO: Managing accounts
+
+            auto_reconnect = context_menu.addAction("Auto reconnect", lambda: self._toggle(self.player.AUTO_RECONNECT))
+            auto_reconnect.setCheckable(True)
+            auto_reconnect.setChecked(self.player.AUTO_RECONNECT.value)
+            # auto_reconnect.setToolTip("Allow this player to automatically reconnect.")
+
+            disable_auto_reconnect_on_auto_logout = context_menu.addAction(
+                "Disable on autolog",
+                lambda: self._toggle(self.player.DISABLE_AUTO_RECONNECT_ON_LOGOUT),
+            )
+            disable_auto_reconnect_on_auto_logout.setCheckable(True)
+            disable_auto_reconnect_on_auto_logout.setChecked(self.player.DISABLE_AUTO_RECONNECT_ON_LOGOUT.value)
+
+            context_menu.addSeparator()  # To make clear that the above are exclusive to each other
+
+            connect = context_menu.addAction("Connect", lambda: self.parent_._connect(self.player))
+            connect.setEnabled(self.parent_._connect_thread is None and not self.player.isConnected())
+            # connect.setToolTip("Connects this player to the currently selected server.")
+
+            disconnect = context_menu.addAction("Disconnect", lambda: self.player.disconnect("User disconnect"))
+            disconnect.setEnabled(self.player.isConnected())
+            # disconnect.setToolTip("Disconnects this player from the currently selected server.")
+
+            remove = context_menu.addAction("Remove", lambda: self.parent_._remove(self.player))
+            remove.setEnabled(self.player.server.hasPlayer(self.player))
+            # remove.setEnabled(self.yescom.accountHandler.hasAccount(player.account))
+            # remove.setToolTip("Removes this player's account from the account cache.")
+
+            context_menu.addSeparator()
+
+            context_menu.addAction("Copy username", lambda: QApplication.clipboard().setText(self.player.getUsername()))
+            context_menu.addAction("Copy UUID", lambda: QApplication.clipboard().setText(str(self.player.getUUID())))
+
+            context_menu.addSeparator()
+
+            copy_coords = context_menu.addAction(
+                "Copy coords",
+                lambda: QApplication.clipboard().setText("%.1f, %.1f, %.1f" % (
+                    self.player.getPosition().getX(),
+                    self.player.getPosition().getY(),
+                    self.player.getPosition().getZ(),
+                )),
+            )
+            copy_coords.setEnabled(self.player.isConnected())
+            copy_angle = context_menu.addAction(
+                "Copy angle",
+                lambda: QApplication.clipboard().setText("%.1f, %.1f" % (
+                    self.player.getAngle().getYaw(),
+                    self.player.getAngle().getPitch(),
+                )),
+            )
+            copy_angle.setEnabled(self.player.isConnected())
+            copy_dimension = context_menu.addAction(
+                "Copy dimension",
+                lambda: QApplication.clipboard().setText(str(self.player.getDimension()).lower()),
+            )
+            copy_dimension.setEnabled(self.player.isConnected())
+
+            # TODO: Goto player, view disconnect logs, view chat
 
         # ------------------------------ Events ------------------------------ #
 
@@ -521,25 +472,28 @@ class PlayersTab(QWidget):
             if player == self.player:
                 connected = player.isConnected()
                 if connected:
-                    self.setToolTip(0, self.connected_tooltip % (
-                        True, player.getServerTPS(), player.getServerPing(), player.getHealth(),
-                    ))
-                    self.setForeground(0, QColor(0, 128, 0))  # TODO: Config options for colours
+                    # self.setToolTip(0, self.connected_tooltip % (
+                    #     True, player.getServerTPS(), player.getServerPing(), player.getHealth(),
+                    # ))
+                    self.setForeground(0, QColor(*self.main_window.config.ONLINE_COLOUR.value))
                 else:
-                    self.setToolTip(0, self.disconnected_tooltip % False)
-                    self.setForeground(0, QColor(200, 0, 0))
+                    # self.setToolTip(0, self.disconnected_tooltip % False)
+                    self.setForeground(0, QColor(*self.main_window.config.OFFLINE_COLOUR.value))
 
                 self.connected_child.setText(1, str(connected))
                 self.connected_child.setToolTip(1, self.child(1).text(1))
 
+                self.location_child.setHidden(not connected)
                 self.position_child.setHidden(not connected)
                 self.angle_child.setHidden(not connected)
                 self.dimension_child.setHidden(not connected)
 
+                self.stats_child.setHidden(not connected)
                 self.health_child.setHidden(not connected)
                 self.hunger_child.setHidden(not connected)
                 self.saturation_child.setHidden(not connected)
 
+                self.debug_child.setHidden(not connected)
                 self.tickrate_child.setHidden(not connected)
                 self.ping_child.setHidden(not connected)
                 self.chunks_child.setHidden(not connected)
@@ -561,9 +515,9 @@ class PlayersTab(QWidget):
 
         def _on_health_update(self, player: Player) -> None:
             if player == self.player:
-                self.setToolTip(0, self.connected_tooltip % (
-                    player.isConnected(), player.getServerTPS(), player.getServerPing(), player.getHealth(),
-                ))
+                # self.setToolTip(0, self.connected_tooltip % (
+                #     player.isConnected(), player.getServerTPS(), player.getServerPing(), player.getHealth(),
+                # ))
 
                 self.health_child.setText(1, "%.1f" % player.getHealth())
                 self.health_child.setToolTip(1, self.health_child.text(1))
@@ -574,9 +528,9 @@ class PlayersTab(QWidget):
 
         def _on_server_stats_update(self, player: Player) -> None:
             if player == self.player:
-                self.setToolTip(0, self.connected_tooltip % (
-                    player.isConnected(), player.getServerTPS(), player.getServerPing(), player.getHealth(),
-                ))
+                # self.setToolTip(0, self.connected_tooltip % (
+                #     player.isConnected(), player.getServerTPS(), player.getServerPing(), player.getHealth(),
+                # ))
 
                 self.tickrate_child.setText(1, "%.1ftps" % player.getServerTPS())
                 self.tickrate_child.setToolTip(1, self.tickrate_child.text(1))
@@ -584,156 +538,6 @@ class PlayersTab(QWidget):
                 self.ping_child.setToolTip(1, self.ping_child.text(1))
                 self.chunks_child.setText(1, "%i" % len(player.loadedChunks))
                 self.chunks_child.setToolTip(1, self.chunks_child.text(1))
-
-    class PlayersTree(QTreeWidget):  # TODO: Search by username
-        """
-        Tree widget containing information about players currently online.
-        """
-
-        def __init__(self, parent: "PlayersTab") -> None:
-            """
-            :param parent: The parent widget.
-            """
-
-            super().__init__(parent)
-
-            self.yescom = YesCom.getInstance()
-            self.main_window = MainWindow.INSTANCE
-
-            self.dirty = False
-
-            self.setColumnCount(2)
-            self.setHeaderLabels(["All players (0):", ""])
-            self.setToolTip("All the players that YesCom has seen across all servers, not just the ones online.")
-
-            self.itemChanged.connect(lambda item: self._set_dirty())
-
-            self.main_window.tick.connect(self._on_tick)
-
-            self.resizeColumnToContents(0)
-
-        # ------------------------------ Events ------------------------------ #
-
-        def contextMenuEvent(self, event: QContextMenuEvent) -> None:
-            current = self.currentItem()
-            if current is None:
-                return
-
-            menu = QMenu()
-            clipboard = QApplication.clipboard()
-
-            if isinstance(current, PlayersTab.PlayerItem):
-                info = current.info
-            elif isinstance(current.parent(), PlayersTab.PlayerItem):
-                info = current.parent().info
-            else:
-                logger.warning("Don't know how to handle item %s." % current)
-                return
-
-            trusted = menu.addAction("Trusted", lambda: self._toggle_trusted(info.uuid))
-            trusted.setCheckable(True)
-            trusted.setChecked(self.yescom.playersHandler.isTrusted(info.uuid))
-
-            menu.addSeparator()
-            menu.addAction("View info", lambda: self._view_info(info))
-            menu.addSeparator()
-            menu.addAction("Open NameMC...", lambda: webbrowser.open("https://namemc.com/profile/%s" % info.uuid))
-            menu.addSeparator()
-            menu.addAction(
-                "Copy username",
-                lambda: clipboard.setText(self.yescom.playersHandler.getName(info.uuid, "<unknown name>")),
-            )
-            menu.addAction("Copy UUID", lambda: clipboard.setText(str(info.uuid)))
-
-            menu.exec(event.globalPos())
-
-        def _on_tick(self) -> None:
-            if self.dirty:
-                self.resizeColumnToContents(0)
-                self.dirty = False
-
-        # ------------------------------ Utility methods ------------------------------ #
-
-        def _set_dirty(self) -> None:
-            self.dirty = True
-
-        def _toggle_trusted(self, uuid: UUID) -> None:
-            if self.yescom.playersHandler.isTrusted(uuid):
-                self.yescom.playersHandler.removeTrusted(uuid)
-            else:
-                self.yescom.playersHandler.addTrusted(uuid)
-
-        def _view_account(self, player: Player) -> None:
-            if self.main_window.current_server != player.server:
-                # Switch to the player's server if we're not viewing it, weird that we wouldn't be though
-                self.main_window.current_server = player.server
-
-            self.main_window.players_tab.select_account(player)
-            self.main_window.players_tab.expand_account(player)
-            self.main_window.set_selected(self.main_window.players_tab)
-
-        def _view_info(self, info: PlayerInfo) -> None:
-            player_info_dialog = PlayerInfoDialog(self, info)
-            player_info_dialog.show()
-
-    class PlayerItem(QTreeWidgetItem):
-        """
-        Information about any player online on the server.
-        """
-
-        def __init__(self, parent: "PlayersTab.PlayersTree", info: PlayerInfo) -> None:
-            super().__init__(parent)
-
-            self.yescom = YesCom.getInstance()
-            self.main_window = MainWindow.INSTANCE
-
-            self.info = info
-
-            uuid = info.uuid
-            name = self.yescom.playersHandler.getName(uuid, str(uuid))
-
-            self.setText(0, name)
-            # self.setToolTip(0, self.tooltip % (info.ping, str(info.gameMode).lower()))
-
-            # TODO: Icons? They might start to fill up memory, perhaps only if the player is online
-            # self.main_window.skin_downloader_thread.request_skin(
-            #     uuid, lambda icon: self.setIcon(0, icon), parent.automatic_skins,
-            # )
-
-            uuid_child = QTreeWidgetItem(self, ["UUID", str(uuid)])
-            uuid_child.setToolTip(0, "The UUID of the player.")
-            uuid_child.setToolTip(1, str(uuid))
-            self.addChild(uuid_child)
-
-            # TODO: Sessions, are we tracking them, etc...
-
-            trusted_child = QTreeWidgetItem(self, ["Trusted:"])
-            trusted_child.setToolTip(0, "Is this a player that we trust?")
-            self.addChild(trusted_child)
-            self._on_trust_state_changed(info)
-
-            first_seen_child = QTreeWidgetItem(
-                self, ["First seen:", str(datetime.datetime.fromtimestamp(info.firstSeen // 1000))],
-            )
-            first_seen_child.setToolTip(0, "The first time that YesCom saw the player (across all servers).")
-            first_seen_child.setToolTip(1, first_seen_child.text(1))
-            self.addChild(first_seen_child)
-
-            self.main_window.trust_state_changed.connect(self._on_trust_state_changed)
-
-        def __eq__(self, other: Any) -> bool:
-            return isinstance(other, PlayersTab.PlayerItem) and other.info == self.info
-
-        def _on_trust_state_changed(self, info: PlayerInfo) -> None:
-            if info == self.info:
-                trusted = self.yescom.playersHandler.isTrusted(info.uuid)
-                if trusted:
-                    self.setForeground(0, QColor(0, 117, 163))  # TODO: Configurable
-                else:
-                    self.setForeground(0, QApplication.palette().text())
-
-                self.child(1).setText(1, str(trusted))
-                self.child(1).setToolTip(1, self.child(1).text(1))
 
     class ConnectThread(QThread):
         """
