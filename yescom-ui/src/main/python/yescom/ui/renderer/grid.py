@@ -9,6 +9,8 @@ from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import *
 
+from ..tabs.secret import DebugTab
+
 from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
 from ez.pogdog.yescom.api.data import Dimension
@@ -22,6 +24,8 @@ class GridRenderer(QGraphicsView):
     """
     Responsible for rendering the grid in the grid view tab.
     """
+
+    _SECRET_KEY_SEQUENCE = (Qt.Key.Key_Up, Qt.Key.Key_A, Qt.Key.Key_N, Qt.Key.Key_T, Qt.Key.Key_Down)
 
     @property
     def dimension(self) -> Dimension:
@@ -68,6 +72,8 @@ class GridRenderer(QGraphicsView):
 
         self.setBackgroundBrush(QBrush(QColor(255, 255, 255)))  # TODO: Set based on dimension
         self.setFrameShape(QFrame.Shape.NoFrame)
+
+        self._secret_sequence = []
 
         self._scale = (1, 1)
         self._dimension = Dimension.OVERWORLD
@@ -183,6 +189,17 @@ class GridRenderer(QGraphicsView):
 
     # ------------------------------ Events ------------------------------ #
 
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        if event.key() in self._SECRET_KEY_SEQUENCE:
+            if event.key() != self._SECRET_KEY_SEQUENCE[len(self._secret_sequence)]:
+                self._secret_sequence.clear()
+            self._secret_sequence.append(event.key())
+
+            if tuple(self._secret_sequence) == self._SECRET_KEY_SEQUENCE and not hasattr(self.main_window, "debug_tab"):
+                self._secret_sequence.clear()
+                self.main_window.debug_tab = DebugTab(self.main_window)
+                self.main_window.tab_widget.addTab(self.main_window.debug_tab, "Debug")
+
     def resizeEvent(self, event: QResizeEvent) -> None:
         self._last_mouse_pos = None
 
@@ -191,7 +208,7 @@ class GridRenderer(QGraphicsView):
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
         if self._selection.mode != GridRenderer.Selection.Mode.NONE:
             self._selecting = True
-            self.setCursor(Qt.CursorShape.CrossCursor)
+            QApplication.setOverrideCursor(Qt.CursorShape.CrossCursor)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if event.buttons() & Qt.MouseButton.LeftButton:
@@ -199,12 +216,14 @@ class GridRenderer(QGraphicsView):
             control_pressed = QApplication.queryKeyboardModifiers() & Qt.KeyboardModifier.ControlModifier
             if shift_pressed or control_pressed:
                 if self._selection.mode != GridRenderer.Selection.Mode.NONE and not self._selecting:
+                    if self._last_mouse_pos is not None:  # Cursor will be set to grabbing
+                        QApplication.restoreOverrideCursor()
                     self._selecting = True
-                    self.setCursor(Qt.CursorShape.CrossCursor)
+                    QApplication.setOverrideCursor(Qt.CursorShape.CrossCursor)
 
             position = QPoint(int(event.position().x()), int(event.position().y()))
 
-            if self._selecting:
+            if self._selection.mode != GridRenderer.Selection.Mode.NONE and self._selecting:
                 if self._last_mouse_pos is not None:
                     old_position = self.mapToScene(self._last_mouse_pos)
                     new_position = self.mapToScene(event.pos())
@@ -220,15 +239,16 @@ class GridRenderer(QGraphicsView):
                 if self._last_mouse_pos is not None:
                     delta = self.mapToScene(self._last_mouse_pos) - self.mapToScene(position)
                     self.setSceneRect(self.sceneRect().translated(delta))
+                else:
+                    QApplication.setOverrideCursor(Qt.CursorShape.ClosedHandCursor)
 
-                self.setCursor(Qt.CursorShape.ClosedHandCursor)
                 self._last_mouse_pos = position
 
         self._update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
-        if self._last_mouse_pos is not None:
-            self.setCursor(Qt.CursorShape.ArrowCursor)
+        if self._last_mouse_pos is not None or self._selecting:
+            QApplication.restoreOverrideCursor()
             self._last_mouse_pos = None
 
             self._selecting = False
@@ -551,10 +571,10 @@ class GridRenderer(QGraphicsView):
         # ------------------------------ Events ------------------------------ #
 
         def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:
-            self._parent.setCursor(Qt.CursorShape.PointingHandCursor)
+            ...  # self.main_window.grid_view_tab.setCursor(Qt.CursorShape.PointingHandCursor)
 
         def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
-            self._parent.setCursor(Qt.CursorShape.ArrowCursor)
+            ...  # self.main_window.grid_view_tab.unsetCursor()
 
         def _on_player_login(self, player: Player) -> None:
             if player == self._player:

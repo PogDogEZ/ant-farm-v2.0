@@ -12,4 +12,5 @@
  - **MCProtocolLib** - https://github.com/GeyserMC/MCProtocolLib
  - **Jep** - https://github.com/ninia/jep
  - **Qt** - https://www.qt.io/
+ - **pyqtconsole** - https://github.com/pyqtconsole/pyqtconsole
  - **bresenham** - https://github.com/encukou/bresenham

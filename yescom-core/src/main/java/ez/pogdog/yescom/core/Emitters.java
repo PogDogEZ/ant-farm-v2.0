@@ -11,6 +11,8 @@ import ez.pogdog.yescom.core.account.IAccount;
 import ez.pogdog.yescom.core.connection.Player;
 import ez.pogdog.yescom.core.connection.Server;
 import ez.pogdog.yescom.core.report.Report;
+import ez.pogdog.yescom.core.scanning.IScanner;
+import ez.pogdog.yescom.core.scanning.ITask;
 
 /**
  * Global {@link Emitter}s for YesCom.
@@ -139,14 +141,30 @@ public class Emitters {
     public static final Emitter<Server> ON_CONNECTION_ESTABLISHED = new Emitter<>(Server.class);
 
     /**
-     * Fired when connection is fully lost to a server.
+     * Fired when a new scanner is applied to a server.
      */
-    public static final Emitter<Server> ON_CONNECTION_LOST = new Emitter<>(Server.class);
+    public static final Emitter<ServerScanner> ON_SCANNER_ADDED = new Emitter<>(ServerScanner.class);
+    // public static final Emitter<ServerScanner> ON_SCANNER_REMOVED = new Emitter<>(ServerScanner.class);
+
+    /**
+     * Fired when a new task is added to a server.
+     */
+    public static final Emitter<ServerTask> ON_TASK_ADDED = new Emitter<>(ServerTask.class);
+
+    /**
+     * Fired when a task is removed from a server.
+     */
+    public static final Emitter<ServerTask> ON_TASK_REMOVED = new Emitter<>(ServerTask.class);
 
     /**
      * Fired when a chunk state has been resolved for a given server.
      */
     public static final Emitter<ServerChunkState> ON_CHUNK_STATE = new Emitter<>(ServerChunkState.class);
+
+    /**
+     * Fired when connection is fully lost to a server.
+     */
+    public static final Emitter<Server> ON_CONNECTION_LOST = new Emitter<>(Server.class);
 
     /* ------------------------------ Reporting ------------------------------ */
 
@@ -224,6 +242,28 @@ public class Emitters {
             super(info, server);
 
             this.death = death;
+        }
+    }
+
+    public static class ServerScanner {
+
+        public final Server server;
+        public final IScanner scanner;
+
+        public ServerScanner(Server server, IScanner scanner) {
+            this.server = server;
+            this.scanner = scanner;
+        }
+    }
+
+    public static class ServerTask {
+
+        public final Server server;
+        public final ITask task;
+
+        public ServerTask(Server server, ITask task) {
+            this.server = server;
+            this.task = task;
         }
     }
 

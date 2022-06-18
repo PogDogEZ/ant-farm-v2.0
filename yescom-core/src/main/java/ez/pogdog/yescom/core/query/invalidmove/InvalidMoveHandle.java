@@ -279,11 +279,13 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         private BlockPosition bestStorage = null;
         private Angle requiredAngle;
 
+        private int queriesThisTick = 0;
+
         private boolean resync = true; // When we join, we aren't synced
         private boolean storageOpen = false; // For non-ARZI mode, we need to know if the storage is open
         private boolean openingStorage;
-        private int estimatedTeleportID;
-        private int estimatedWindowID;
+        private int estimatedTeleportID = 1;
+        private int estimatedWindowID = 1;
 
         private int ticksSinceTeleport;
 
@@ -307,8 +309,9 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
          *  - Dequeueing and processing queries.
          */
         private void tick() {
+            queriesThisTick = 0;
             // Expect response within <our ping in ticks> + 2 more ticks for safety
-            float minExpectedTicks = (40.0f + Math.max(1.0f, player.getServerPing()) / 50.0f) * (20.0f / Math.max(1.0f, player.getServerTPS()));
+            float minExpectedTicks = 40.0f + Math.max(1.0f, player.getServerPing()) / 50.0f * (20.0f / Math.max(1.0f, player.getServerTPS()));
             if (++ticksSinceTeleport > minExpectedTicks && !queryMap.isEmpty()) {
                 logger.warning(String.format("%s packet loss (5) ticks: %d, queued: %d.", player.getUsername(),
                         ticksSinceTeleport, queryMap.size()));
@@ -549,7 +552,8 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
 
             } else if (packet instanceof ServerPlayerPositionRotationPacket) {
                 estimatedTeleportID = ((ServerPlayerPositionRotationPacket)packet).getTeleportId();
-                resync = estimatedWindowID != player.getCurrentWindowID();
+                // We may not have actually received a window ID yet
+                resync = player.getCurrentWindowID() >= 0 && estimatedWindowID != player.getCurrentWindowID();
 
                 ticksSinceTeleport = 0;
             }
@@ -855,6 +859,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             previousState = state;
             if (query == null) return;
 
+            logger.finest(String.format("Finalised query %s, state: %s.", query, state));
             Consumer<InvalidMoveQuery> callback = callbacks.get(query);
             callbacks.remove(query);
 
@@ -873,12 +878,11 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
         public boolean canHandle(InvalidMoveQuery query) {
             // Can't handle queries in other dimensions, might still happen (idk), better safe than sorry though
             if (query.dimension != player.getDimension()) return false;
+            if (queriesThisTick >= QUERIES_PER_TICK.value) return false;
             // FIXME: Use estimated ping instead, it's more accurate
             // How many ticks should we expect the server to respond in?
-            float expectedTicks = Math.max(1.0f, player.getServerPing()) / 50.0f;
-
-            // FIXME: This needs to be split across multiple ticks as otherwise it'll send a ton of packets at first, and then even out
-            return expectedTicks * QUERIES_PER_TICK.value < queryMap.size();
+            float expectedTicks = Math.max(50.0f, player.getServerPing()) / 50.0f;
+            return expectedTicks * QUERIES_PER_TICK.value > queryMap.size();
         }
 
         /**
@@ -886,8 +890,7 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
          */
         public boolean canQuery() {
             // Do we have a storage, have we spawned in and has the storage been opened?
-            return bestStorage != null && player.isSpawned() && player.getCurrentWindowID() >= 0 && !resync &&
-                    (storageOpen || ARZI_MODE.value);
+            return bestStorage != null && player.isSpawned() && !resync && (storageOpen || ARZI_MODE.value);
         }
 
         public float getThroughputFor(int ahead) {
@@ -931,6 +934,8 @@ public class InvalidMoveHandle implements IQueryHandle<InvalidMoveQuery>, IConfi
             // have gone wrong if we do not receive the open storage packet before the response
             player.send(new ClientPlayerPositionPacket(false, positionX, position.getY(), positionZ));
             player.send(new ClientTeleportConfirmPacket(estimatedTeleportID));
+
+            ++queriesThisTick;
         }
     }
 }

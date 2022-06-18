@@ -55,7 +55,8 @@ public class Main {
             Enumeration<? extends ZipEntry> entries = thisFile.entries();
             while (entries.hasMoreElements()) {
                 ZipEntry entry = entries.nextElement();
-                if (!entry.isDirectory() && entry.getName().startsWith("yescom/")) {
+                String name = entry.getName();
+                if (!entry.isDirectory() && (name.startsWith("yescom/") || name.startsWith("pyqtconsole/"))) {
                     File outputFile = new File(yesComNatives, entry.getName());
                     logger.fine(String.format("Extracting %s -> %s", entry.getName(), outputFile.getName()));
 

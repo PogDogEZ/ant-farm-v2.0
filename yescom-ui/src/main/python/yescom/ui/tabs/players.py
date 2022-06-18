@@ -97,11 +97,11 @@ class PlayersTab(QWidget):
         accounts_layout.addLayout(login_buttons_layout)
 
         self.disconnect_all_button = QPushButton(self)
+        self.disconnect_all_button.setText("Disconnect all")
+        self.disconnect_all_button.setToolTip("Disconnects all currently online players and disables auto reconnecting.")
         self.disconnect_all_button.setEnabled(
             self.main_window.current_server is not None and self.main_window.current_server.isConnected()
         )
-        self.disconnect_all_button.setText("Disconnect all")
-        self.disconnect_all_button.setToolTip("Disconnects all currently online players and disables auto reconnecting.")
         self.disconnect_all_button.clicked.connect(lambda checked: self.main_window.disconnect_all())
         accounts_layout.addWidget(self.disconnect_all_button)
 
@@ -137,7 +137,7 @@ class PlayersTab(QWidget):
             self.password_edit.setEnabled(True)
             self.password_edit.clear()
 
-            self.setCursor(Qt.CursorShape.ArrowCursor)
+            QApplication.restoreOverrideCursor()
 
     def _on_account_error(self, account_error: Emitters.AccountError) -> None:
         if account_error.account == self._processing_account:
@@ -152,7 +152,7 @@ class PlayersTab(QWidget):
             self.password_edit.setEnabled(True)
             self.password_edit.clear()
 
-            self.setCursor(Qt.CursorShape.ArrowCursor)
+            QApplication.setOverrideCursor(Qt.CursorShape.ArrowCursor)
 
     def _on_username_changed(self, text: str) -> None:
         self.mojang_login_button.setEnabled(len(text) > 3 and len(self.password_edit.text()) > 3)
@@ -174,7 +174,7 @@ class PlayersTab(QWidget):
             self.mojang_login_button.setEnabled(False)
             self.microsoft_login_button.setEnabled(False)
 
-            self.setCursor(Qt.CursorShape.WaitCursor)
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             self.yescom.accountHandler.addAccount(self._processing_account)
 
     def _on_microsoft_login(self, checked: bool) -> None:
@@ -189,7 +189,7 @@ class PlayersTab(QWidget):
             self.mojang_login_button.setEnabled(False)
             self.microsoft_login_button.setEnabled(False)
 
-            self.setCursor(Qt.CursorShape.WaitCursor)
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
             self.yescom.accountHandler.addAccount(self._processing_account)
 
     # ------------------------------ Public methods ------------------------------ #
@@ -265,7 +265,7 @@ class PlayersTab(QWidget):
         def _on_connect(self) -> None:
             player = self._connect_thread.player
             self._connect_thread = None
-            self.parent().setCursor(Qt.CursorShape.ArrowCursor)
+            QApplication.restoreOverrideCursor()
 
             if not player.isConnected():
                 QMessageBox.warning(
@@ -284,13 +284,10 @@ class PlayersTab(QWidget):
         # disconnected_tooltip = "%s\nServer: %s:%i\nConnected: %%s\nRight click for more options."
 
         def __init__(self, parent: "PlayersTab.AccountsTree", info: PlayerInfo, player: Player):
-            super().__init__(parent, info)
-
-            self.yescom = YesCom.getInstance()
-            self.main_window = MainWindow.INSTANCE
-
             self.parent_ = parent  # Need to keep a reference of this ourselves, I guess, thanks Qt
             self.player = player
+
+            super().__init__(parent, info)
 
             # self.connected_tooltip = self.connected_tooltip % (
             #     player.getUsername(), player.server.hostname, player.server.port,
@@ -519,7 +516,7 @@ class PlayersTab(QWidget):
             """
 
             if self.parent_._connect_thread is None and not self.player.isConnected():
-                self.parent_.parent().setCursor(Qt.CursorShape.WaitCursor)
+                QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
                 self.parent_._connect_thread = PlayersTab.ConnectThread(self.parent_, self.player)
                 self.parent_._connect_thread.finished.connect(self.parent_._on_connect)
                 self.parent_._connect_thread.start()

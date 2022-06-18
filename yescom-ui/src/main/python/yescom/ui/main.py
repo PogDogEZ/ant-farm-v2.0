@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
-import os
-from typing import Dict, List, Tuple, Union
+from typing import Union
 
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
@@ -110,37 +109,6 @@ class MainWindow(QMainWindow):
     def __repr__(self) -> str:
         return "<MainWindow() at %x>" % id(self)
 
-    def closeEvent(self, event: QCloseEvent) -> None:
-        logger.finer("Received close event.")
-
-        connected_servers = 0
-        connected_players = 0
-        for server in self.yescom.servers:
-            if server.isConnected():
-                connected_servers += 1
-                for player in server.getPlayers():
-                    if player.isConnected():
-                        connected_players += 1
-
-        if connected_servers or connected_players:
-            message_box = QMessageBox(self)
-            message_box.setIcon(QMessageBox.Icon.Question)
-            message_box.setWindowTitle("Exit")
-            message_box.setText("Are you sure you wish to exit YesCom?")
-            # TODO: Trackers, tasks, etc...
-            message_box.setInformativeText("There are currently %i connected player(s) over %i servers." %
-                                           (connected_players, connected_servers))
-            message_box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
-            message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
-            message_box.setEscapeButton(QMessageBox.StandardButton.Cancel)
-            message_box.accepted.connect(lambda: System.exit(0))  # TODO: Proper shut down sequence?
-            message_box.rejected.connect(lambda: event.setAccepted(False))
-            message_box.exec()
-        else:
-            System.exit(0)
-
-        # super().closeEvent(event)
-
     def _setup_signals(self) -> None:
         logger.fine("Setting up signals...")
         # Need to do this cos we want the certain processes to be carried out in the right thread
@@ -233,6 +201,37 @@ class MainWindow(QMainWindow):
 
     # ------------------------------ Events ------------------------------ #
 
+    def closeEvent(self, event: QCloseEvent) -> None:
+        logger.finer("Received close event.")
+
+        connected_servers = 0
+        connected_players = 0
+        for server in self.yescom.servers:
+            if server.isConnected():
+                connected_servers += 1
+                for player in server.getPlayers():
+                    if player.isConnected():
+                        connected_players += 1
+
+        if connected_servers or connected_players:
+            message_box = QMessageBox(self)
+            message_box.setIcon(QMessageBox.Icon.Question)
+            message_box.setWindowTitle("Exit")
+            message_box.setText("Are you sure you wish to exit YesCom?")
+            # TODO: Trackers, tasks, etc...
+            message_box.setInformativeText("There are currently %i connected player(s) over %i servers." %
+                                           (connected_players, connected_servers))
+            message_box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+            message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+            message_box.setEscapeButton(QMessageBox.StandardButton.Cancel)
+            message_box.accepted.connect(lambda: System.exit(0))  # TODO: Proper shut down sequence?
+            message_box.rejected.connect(lambda: event.setAccepted(False))
+            message_box.exec()
+        else:
+            System.exit(0)
+
+        # super().closeEvent(event)
+
     def _on_server_changed(self, index: int) -> None:
         if self.servers_combo_box.currentData() is None:
             # TODO: Implement
@@ -293,5 +292,6 @@ from .tabs.graphs import GraphsTab
 from .tabs.grid_view import GridViewTab
 from .tabs.options import OptionsTab
 from .tabs.overview import OverviewTab
+from .tabs.secret import DebugTab
 from .tabs.tasks import TasksTab
 from .threads import EventQueueThread, SkinDownloaderThread

@@ -442,8 +442,7 @@ class AbstractPlayersTree(QTreeWidget):
             main_layout = QVBoxLayout(self)
 
             self.search_edit = QLineEdit(self)
-            # FIXME: RE validator
-            # self.search_edit.setValidator(QRegExpValidator(QRegExp("[A-Za-z0-9_]{1,18}"), self))
+            self.search_edit.setValidator(QRegularExpressionValidator(QRegularExpression("[A-Za-z0-9_]{1,18}"), self))
             self.search_edit.setFixedWidth(self.search_edit.fontMetrics().boundingRect("M" * 16).width())
             self.search_edit.setPlaceholderText("Search by username...")
             self.search_edit.textChanged.connect(self._on_search_text_changed)
