@@ -4,8 +4,8 @@ import requests
 import time
 from typing import Dict, Tuple
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
 
 from .. import emitters
 
@@ -91,9 +91,12 @@ class SkinDownloaderThread(QThread):
                             request = requests.get(player_info.skinURL)
                             if request.status_code == 200:
                                 player_skin = QPixmap()
-                                player_skin.loadFromData(request.content, format="PNG", flags=Qt.AutoColor | Qt.AutoDither)
+                                player_skin.loadFromData(
+                                    request.content, format="PNG",
+                                    flags=Qt.ImageConversionFlag.AutoColor | Qt.ImageConversionFlag.AutoDither,
+                                )
                                 player_head = player_skin.copy(8, 8, 8, 8)
-                                player_head = player_head.scaled(32, 32, transformMode=Qt.FastTransformation)
+                                player_head = player_head.scaled(32, 32, transformMode=Qt.TransformationMode.FastTransformation)
 
                                 # Cache expires in 30 minutes
                                 self._cache_mutex.lock()

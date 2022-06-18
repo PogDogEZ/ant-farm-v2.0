@@ -6,9 +6,9 @@ import time
 import webbrowser
 from typing import Any, Tuple, Union
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 
 from ..dialogs.player_info import PlayerInfoDialog
 
@@ -367,12 +367,12 @@ class AbstractPlayersTree(QTreeWidget):
         self._setup()
 
         self.setColumnCount(2)  # Second column is for the data, first is for the labels
-        self.setSelectionMode(QAbstractItemView.NoSelection)
+        self.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
         self.setHeaderLabels(["%s (0):" % label, ""])
 
         header = self.header()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
 
     def _setup(self) -> None:
         ...
@@ -431,7 +431,7 @@ class AbstractPlayersTree(QTreeWidget):
             geometry = self.geometry()
             geometry.setTopLeft(origin)
             self.setGeometry(geometry)
-            self.setWindowFlags(Qt.Window | Qt.Popup | Qt.FramelessWindowHint)
+            self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
 
             self._setup()
 
@@ -442,8 +442,9 @@ class AbstractPlayersTree(QTreeWidget):
             main_layout = QVBoxLayout(self)
 
             self.search_edit = QLineEdit(self)
-            self.search_edit.setValidator(QRegExpValidator(QRegExp("[A-Za-z0-9_]{1,18}"), self))
-            self.search_edit.setFixedWidth(self.search_edit.fontMetrics().width("M" * 16))
+            # FIXME: RE validator
+            # self.search_edit.setValidator(QRegExpValidator(QRegExp("[A-Za-z0-9_]{1,18}"), self))
+            self.search_edit.setFixedWidth(self.search_edit.fontMetrics().boundingRect("M" * 16).width())
             self.search_edit.setPlaceholderText("Search by username...")
             self.search_edit.textChanged.connect(self._on_search_text_changed)
             self.search_edit.returnPressed.connect(self.close)

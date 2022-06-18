@@ -3,9 +3,9 @@
 import datetime
 from typing import List, Set, Tuple, Union
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 
 from java.util import UUID
 
@@ -35,7 +35,7 @@ class PlayerInfoDialog(QDialog):
         logger.fine("New player info dialog.")
 
         self.setWindowTitle("Player info - %s" % info.username)
-        self.setWindowModality(Qt.ApplicationModal)
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setModal(True)
 
         self._setup_dialog()
@@ -51,7 +51,9 @@ class PlayerInfoDialog(QDialog):
         player_label = QLabel(self)
         player_label.setText("Player: %s" % self.info.username)
         player_label.setToolTip("The player's username.\nSelect to copy.")
-        player_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        player_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard,
+        )
         main_layout.addWidget(player_label)
 
         info_layout = QGridLayout()
@@ -65,13 +67,17 @@ class PlayerInfoDialog(QDialog):
         uuid_label = QLabel(self)
         uuid_label.setText("UUID: %s" % self.info.uuid)
         uuid_label.setToolTip("The player's UUID.\nSelect to copy.")
-        uuid_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        uuid_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard,
+        )
         info_layout.addWidget(uuid_label, 0, 1, 1, 1)
 
         first_seen_label = QLabel(self)
         first_seen_label.setText("First seen: %s" % str(datetime.datetime.fromtimestamp(self.info.firstSeen // 1000)))
         first_seen_label.setToolTip("The first time YesCom saw the player.\nSelect to copy.")
-        first_seen_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        first_seen_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard,
+        )
         info_layout.addWidget(first_seen_label, 1, 1, 1, 1)
 
         self.trusted_check_box = QCheckBox(self)
@@ -93,7 +99,7 @@ class PlayerInfoDialog(QDialog):
         main_layout.addWidget(self.servers_tabs)
 
         dialog_buttons = QDialogButtonBox(self)
-        dialog_buttons.setStandardButtons(QDialogButtonBox.Ok)
+        dialog_buttons.setStandardButtons(QDialogButtonBox.StandardButton.Ok)
         dialog_buttons.accepted.connect(self.close)
         main_layout.addWidget(dialog_buttons)
 
@@ -129,12 +135,12 @@ class PlayerInfoDialog(QDialog):
     def _on_skin_resolved(self, resolved: Tuple[UUID, QPixmap]) -> None:
         if resolved[0] == self.info.uuid:
             self.setWindowIcon(QIcon(resolved[1]))
-            self.skin_label.setPixmap(resolved[1].scaled(128, 128, transformMode=Qt.FastTransformation))
+            self.skin_label.setPixmap(resolved[1].scaled(64, 64, transformMode=Qt.TransformationMode.FastTransformation))
 
     def _on_trusted_checkbox_state_changed(self, state: int) -> None:
-        if state == Qt.Checked:
+        if state == Qt.CheckState.Checked:
             self.yescom.playersHandler.addTrusted(self.info.uuid)
-        elif state == Qt.Unchecked:
+        elif state == Qt.CheckState.Unchecked:
             self.yescom.playersHandler.removeTrusted(self.info.uuid)
 
     def _on_trust_state_changed(self, info: PlayerInfo) -> None:
@@ -153,7 +159,7 @@ class PlayerInfoDialog(QDialog):
 
             self.player_info = info
 
-            self.setToolTip("The sessions this player has had on this server.")
+            # self.setToolTip("The sessions this player has had on this server.")
 
             # TODO: Selectable date for between
             # for session in sorted(sessions, key=lambda session: session.start):

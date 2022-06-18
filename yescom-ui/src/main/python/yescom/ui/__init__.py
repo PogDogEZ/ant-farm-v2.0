@@ -2,13 +2,11 @@
 
 import os
 import threading
-import tempfile
-from zipfile import ZipFile
 from typing import List
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 
 from .main import MainWindow
 from .resources import Resources
@@ -31,7 +29,7 @@ class SplashScreen(QSplashScreen):
         self.width = width
         self.height = height
 
-        self.setWindowFlag(Qt.WindowStaysOnTopHint)
+        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
 
         self.movie = QMovie(temp_extract)
         self.movie.frameChanged.connect(self._on_frame_changed)
@@ -70,7 +68,7 @@ def main(args: List[str], jar_path: str) -> None:
     app = QApplication(list(args))
     app.setStyle(preferred_style)
 
-    screen = QApplication.desktop().screen()
+    screen = QApplication.primaryScreen().geometry()
 
     splash_screen = SplashScreen(int(screen.width() / 2), int(screen.height() / 2), splash_gif)
     splash_screen.show()
@@ -88,8 +86,8 @@ def main(args: List[str], jar_path: str) -> None:
 
     main_window = MainWindow()
     main_window.resize(int(screen.width() / 2), int(screen.height() / 2))
-    main_window.move(screen.rect().center() - main_window.rect().center())
-    main_window.setWindowState(main_window.windowState() & ~Qt.WindowMinimized | Qt.WindowActive)
+    main_window.move(screen.center() - main_window.rect().center())
+    main_window.setWindowState(main_window.windowState() & ~Qt.WindowState.WindowMinimized | Qt.WindowState.WindowActive)
     main_window.activateWindow()
     main_window.show()
     splash_screen.finish(main_window)

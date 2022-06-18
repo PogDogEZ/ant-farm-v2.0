@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 
-import datetime
-import webbrowser
-from typing import Any, Tuple, Union
+from typing import Tuple, Union
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 
 from ..widgets.players import AbstractPlayersTree, OfflinePlayersTree
 
@@ -75,7 +73,7 @@ class PlayersTab(QWidget):
         credentials_layout.addWidget(self.username_edit, 0, 1, 1, 1)
 
         self.password_edit = QLineEdit(self)
-        self.password_edit.setEchoMode(QLineEdit.Password)
+        self.password_edit.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_edit.returnPressed.connect(lambda: self._on_mojang_login(False))  # TODO: Microsoft login?
         self.password_edit.textChanged.connect(self._on_password_changed)
         credentials_layout.addWidget(self.password_edit, 1, 1, 1, 1)
@@ -139,7 +137,7 @@ class PlayersTab(QWidget):
             self.password_edit.setEnabled(True)
             self.password_edit.clear()
 
-            self.setCursor(Qt.ArrowCursor)
+            self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def _on_account_error(self, account_error: Emitters.AccountError) -> None:
         if account_error.account == self._processing_account:
@@ -154,7 +152,7 @@ class PlayersTab(QWidget):
             self.password_edit.setEnabled(True)
             self.password_edit.clear()
 
-            self.setCursor(Qt.ArrowCursor)
+            self.setCursor(Qt.CursorShape.ArrowCursor)
 
     def _on_username_changed(self, text: str) -> None:
         self.mojang_login_button.setEnabled(len(text) > 3 and len(self.password_edit.text()) > 3)
@@ -176,7 +174,7 @@ class PlayersTab(QWidget):
             self.mojang_login_button.setEnabled(False)
             self.microsoft_login_button.setEnabled(False)
 
-            self.setCursor(Qt.WaitCursor)
+            self.setCursor(Qt.CursorShape.WaitCursor)
             self.yescom.accountHandler.addAccount(self._processing_account)
 
     def _on_microsoft_login(self, checked: bool) -> None:
@@ -191,7 +189,7 @@ class PlayersTab(QWidget):
             self.mojang_login_button.setEnabled(False)
             self.microsoft_login_button.setEnabled(False)
 
-            self.setCursor(Qt.WaitCursor)
+            self.setCursor(Qt.CursorShape.WaitCursor)
             self.yescom.accountHandler.addAccount(self._processing_account)
 
     # ------------------------------ Public methods ------------------------------ #
@@ -240,6 +238,10 @@ class PlayersTab(QWidget):
             self.main_window.player_added.connect(self._on_player_added)
             self.main_window.player_removed.connect(self._on_player_removed)
 
+            for server in self.yescom.servers:  # Players from accounts.txt will already exist by now, so need to add them
+                for player in server.getPlayers():
+                    self._on_player_added(player)
+
         # ------------------------------ Events ------------------------------ #
 
         def _on_player_added(self, player: Player) -> None:
@@ -263,7 +265,7 @@ class PlayersTab(QWidget):
         def _on_connect(self) -> None:
             player = self._connect_thread.player
             self._connect_thread = None
-            self.parent().setCursor(Qt.ArrowCursor)
+            self.parent().setCursor(Qt.CursorShape.ArrowCursor)
 
             if not player.isConnected():
                 QMessageBox.warning(
@@ -272,39 +274,6 @@ class PlayersTab(QWidget):
                         player.getUsername(), player.server.hostname, player.server.port,
                     ),
                 )
-
-        # ------------------------------ Utility methods ------------------------------ #
-
-        def _toggle(self, option: Option) -> None:
-            """
-            Toggles a boolean option's value.
-            """
-
-            option.value = not option.value
-
-        def _connect(self, player: Player) -> None:
-            """
-            Connects a player to the currently selected server.
-            """
-
-            if self._connect_thread is None and not player.isConnected():
-                self.parent().setCursor(Qt.WaitCursor)
-                self._connect_thread = PlayersTab.ConnectThread(self, player)
-                self._connect_thread.finished.connect(self._on_connect)
-                self._connect_thread.start()
-
-        def _remove(self, player: Player) -> None:
-            """
-            Removes a player's account from the cache and displays that it has been removed.
-            """
-
-            if self.yescom.accountHandler.hasAccount(player.account):
-                self.yescom.accountHandler.removeAccount(player.account)
-
-            if player.isConnected():
-                player.disconnect("Removed by user")
-            player.server.removePlayer(player)
-            QMessageBox.information(self, "Success", "The player %r's account has been removed." % player.getUsername())
 
     class AccountItem(AbstractPlayersTree.AbstractPlayerItem):
         """
@@ -348,10 +317,6 @@ class PlayersTab(QWidget):
             self.main_window.player_position_update.connect(self._on_position_update)
             self.main_window.player_health_update.connect(self._on_health_update)
             self.main_window.player_server_stats_update.connect(self._on_server_stats_update)
-
-            for server in self.yescom.servers:  # Players from accounts.txt will already exist by now, so need to add them
-                for player in server.getPlayers():
-                    self._on_player_added(player)
 
         def __eq__(self, other) -> bool:
             return isinstance(other, PlayersTab.AccountItem) and other.player == self.player
@@ -414,7 +379,7 @@ class PlayersTab(QWidget):
 
             context_menu.addSeparator()  # To make clear that the above are exclusive to each other
 
-            connect = context_menu.addAction("Connect", lambda: self.parent_._connect(self.player))
+            connect = context_menu.addAction("Connect", self._connect)
             connect.setEnabled(self.parent_._connect_thread is None and not self.player.isConnected())
             # connect.setToolTip("Connects this player to the currently selected server.")
 
@@ -422,7 +387,7 @@ class PlayersTab(QWidget):
             disconnect.setEnabled(self.player.isConnected())
             # disconnect.setToolTip("Disconnects this player from the currently selected server.")
 
-            remove = context_menu.addAction("Remove", lambda: self.parent_._remove(self.player))
+            remove = context_menu.addAction("Remove", self._remove)
             remove.setEnabled(self.player.server.hasPlayer(self.player))
             # remove.setEnabled(self.yescom.accountHandler.hasAccount(player.account))
             # remove.setToolTip("Removes this player's account from the account cache.")
@@ -538,6 +503,39 @@ class PlayersTab(QWidget):
                 self.ping_child.setToolTip(1, self.ping_child.text(1))
                 self.chunks_child.setText(1, "%i" % len(player.loadedChunks))
                 self.chunks_child.setToolTip(1, self.chunks_child.text(1))
+
+        # ------------------------------ Utility methods ------------------------------ #
+
+        def _toggle(self, option: Option) -> None:
+            """
+            Toggles a boolean option's value.
+            """
+
+            option.value = not option.value
+
+        def _connect(self) -> None:
+            """
+            Connects a player to the currently selected server.
+            """
+
+            if self.parent_._connect_thread is None and not self.player.isConnected():
+                self.parent_.parent().setCursor(Qt.CursorShape.WaitCursor)
+                self.parent_._connect_thread = PlayersTab.ConnectThread(self.parent_, self.player)
+                self.parent_._connect_thread.finished.connect(self.parent_._on_connect)
+                self.parent_._connect_thread.start()
+
+        def _remove(self) -> None:
+            """
+            Removes a player's account from the cache and displays that it has been removed.
+            """
+
+            if self.yescom.accountHandler.hasAccount(self.player.account):
+                self.yescom.accountHandler.removeAccount(self.player.account)
+
+            if self.player.isConnected():
+                self.player.disconnect("Removed by user")
+            self.player.server.removePlayer(self.player)
+            QMessageBox.information(self.parent_, "Success", "The player %r's account has been removed." % self.player.getUsername())
 
     class ConnectThread(QThread):
         """

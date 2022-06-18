@@ -9,8 +9,11 @@ setup(
     version="1.0",
     author="Edward E Stamper",
     description="😈",
-    install_requires=[  # TODO: Install requirements
-        "PyQt5",
+    install_requires=[
+        "bresenham",
+        "PyQt6",
+        "numpy",
+        "jep",
     ],
     packages=find_packages(
         where="src/main/python",
@@ -20,6 +23,7 @@ setup(
         "": "src/main/python",
     },
     # ext_modules=cythonize(
-    #     "src/main/python/yescom/ui/renderer/biome.pyx",  # FIXME: Automate this
+    #     "src/main/python/yescom/ui/renderer/biome/biomes.pyx",
+    #     "src/main/python/yescom/ui/renderer/biome/rand.pyx",  # FIXME: Automate this
     # ),
 )

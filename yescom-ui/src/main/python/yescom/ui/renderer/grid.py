@@ -5,9 +5,9 @@ from enum import Enum
 from typing import Dict, List, Tuple, Union
 
 import bresenham
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 
 from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
@@ -60,14 +60,14 @@ class GridRenderer(QGraphicsView):
         self.main_window = MainWindow.INSTANCE
         self.config = self.main_window.config.renderer  # Direct reference cos it's more legible
 
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
-        self.setTransformationAnchor(QGraphicsView.NoAnchor)
-        self.setResizeAnchor(QGraphicsView.NoAnchor)
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
+        self.setResizeAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
 
         self.setBackgroundBrush(QBrush(QColor(255, 255, 255)))  # TODO: Set based on dimension
-        self.setFrameShape(QFrame.NoFrame)
+        self.setFrameShape(QFrame.Shape.NoFrame)
 
         self._scale = (1, 1)
         self._dimension = Dimension.OVERWORLD
@@ -140,27 +140,27 @@ class GridRenderer(QGraphicsView):
         self._plus_x_highway_text = self._scene.addText("+X", highway_text_font)
         self._plus_x_highway_text.setDefaultTextColor(QColor(*self.config.HIGHWAY_COLOUR.value, 200))
         self._plus_x_highway_text.setZValue(9)
-        self._plus_x_highway_text.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        self._plus_x_highway_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
 
         self._plus_z_highway_text = self._scene.addText("+Z", highway_text_font)
         self._plus_z_highway_text.setDefaultTextColor(QColor(*self.config.HIGHWAY_COLOUR.value, 200))
         self._plus_z_highway_text.setZValue(9)
-        self._plus_z_highway_text.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        self._plus_z_highway_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
 
         self._minus_x_highway_text = self._scene.addText("-X", highway_text_font)
         self._minus_x_highway_text.setDefaultTextColor(QColor(*self.config.HIGHWAY_COLOUR.value, 200))
         self._minus_x_highway_text.setZValue(9)
-        self._minus_x_highway_text.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        self._minus_x_highway_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
 
         self._minus_z_highway_text = self._scene.addText("-Z", highway_text_font)
         self._minus_z_highway_text.setDefaultTextColor(QColor(*self.config.HIGHWAY_COLOUR.value, 200))
         self._minus_z_highway_text.setZValue(9)
-        self._minus_z_highway_text.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        self._minus_z_highway_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
 
     def _setup_position(self) -> None:
         self._position_text = self._scene.addText("Position: 0, 0 (0, 0)")
         self._position_text.setZValue(10)
-        self._position_text.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        self._position_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
         # self._dimension_text = self._scene.addText("Dimension: overworld")
         # self._dimension_text.setZValue(10)
         # self._dimension_text.setFlag(QGraphicsItem.ItemIgnoresTransformations)
@@ -172,7 +172,7 @@ class GridRenderer(QGraphicsView):
 
         self._scale_text = self._scene.addText("10k blocks")
         self._scale_text.setZValue(10)
-        self._scale_text.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        self._scale_text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
         self._scale_lines: Tuple[QGraphicsLineItem, ...] = (
             self._scene.addLine(0, 0, 0, 0, scale_line_pen),
             self._scene.addLine(0, 0, 0, 0, scale_line_pen),
@@ -191,14 +191,18 @@ class GridRenderer(QGraphicsView):
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
         if self._selection.mode != GridRenderer.Selection.Mode.NONE:
             self._selecting = True
-            self.setCursor(Qt.CrossCursor)
+            self.setCursor(Qt.CursorShape.CrossCursor)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        if event.buttons() & Qt.LeftButton:
-            if QApplication.queryKeyboardModifiers() & Qt.ShiftModifier or QApplication.queryKeyboardModifiers() & Qt.ControlModifier:
+        if event.buttons() & Qt.MouseButton.LeftButton:
+            shift_pressed = QApplication.queryKeyboardModifiers() & Qt.KeyboardModifier.ShiftModifier
+            control_pressed = QApplication.queryKeyboardModifiers() & Qt.KeyboardModifier.ControlModifier
+            if shift_pressed or control_pressed:
                 if self._selection.mode != GridRenderer.Selection.Mode.NONE and not self._selecting:
                     self._selecting = True
-                    self.setCursor(Qt.CrossCursor)
+                    self.setCursor(Qt.CursorShape.CrossCursor)
+
+            position = QPoint(int(event.position().x()), int(event.position().y()))
 
             if self._selecting:
                 if self._last_mouse_pos is not None:
@@ -210,29 +214,30 @@ class GridRenderer(QGraphicsView):
                         math.floor(new_position.x() / 16), math.floor(new_position.y() / 16),
                     )
 
-                self._last_mouse_pos = event.pos()
+                self._last_mouse_pos = position
 
             else:
                 if self._last_mouse_pos is not None:
-                    delta = self.mapToScene(self._last_mouse_pos) - self.mapToScene(event.pos())
+                    delta = self.mapToScene(self._last_mouse_pos) - self.mapToScene(position)
                     self.setSceneRect(self.sceneRect().translated(delta))
 
-                self.setCursor(Qt.ClosedHandCursor)
-                self._last_mouse_pos = event.pos()
+                self.setCursor(Qt.CursorShape.ClosedHandCursor)
+                self._last_mouse_pos = position
 
         self._update()
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         if self._last_mouse_pos is not None:
-            self.setCursor(Qt.ArrowCursor)
+            self.setCursor(Qt.CursorShape.ArrowCursor)
             self._last_mouse_pos = None
 
             self._selecting = False
             self._selection.release()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
+        position = QPoint(int(event.position().x()), int(event.position().y()))
         # https://stackoverflow.com/questions/19113532/qgraphicsview-zooming-in-and-out-under-mouse-position-using-mouse-wheel
-        old_pos = self.mapToScene(event.pos())
+        old_pos = self.mapToScene(position)
         self._scale = (  # Mfw I have to keep track of this myself
             self._scale[0] * math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),  # TODO: Configurable
             self._scale[1] * math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),
@@ -241,7 +246,7 @@ class GridRenderer(QGraphicsView):
             math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),
             math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),
         )
-        new_pos = self.mapToScene(event.pos())
+        new_pos = self.mapToScene(position)
         self.setSceneRect(self.sceneRect().translated(old_pos - new_pos))
 
         self._update()
@@ -386,7 +391,7 @@ class GridRenderer(QGraphicsView):
 
             chunks_on_screen = self.width() / (self._scale[0] * 16) + 1
             # High estimate for max width, better safe than sorry
-            blocks = math.ceil(chunks_on_screen * (self.fontMetrics().width("MMMMM blocks") / self.width()) * 16)
+            blocks = math.ceil(chunks_on_screen * (self.fontMetrics().boundingRect("MMMMM blocks").width() / self.width()) * 16)
             log_blocks = math.floor(math.log(blocks, 10))
             interval = math.ceil(blocks / (10 ** math.ceil(log_blocks)))
 
@@ -476,8 +481,8 @@ class GridRenderer(QGraphicsView):
 
                 (origin_x, origin_z), rect = list(self._positions.items())[0]
                 rect = rect.rect()  # Bruh
-                rect.setBottomRight(QPoint(max(origin_x, new_x + 1) * 16, max(origin_z, new_z + 1) * 16))
-                rect.setTopLeft(QPoint(min(origin_x, new_x) * 16, min(origin_z, new_z) * 16))
+                rect.setBottomRight(QPointF(max(origin_x, new_x + 1) * 16, max(origin_z, new_z + 1) * 16))
+                rect.setTopLeft(QPointF(min(origin_x, new_x) * 16, min(origin_z, new_z) * 16))
                 self._positions[origin_x, origin_z].setRect(rect)
 
             self._new_selection = False
@@ -535,7 +540,7 @@ class GridRenderer(QGraphicsView):
             return QRectF(-16, -16, 32, 32)
 
         def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: QWidget = None) -> None:
-            painter.setRenderHint(QPainter.Antialiasing)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             if self._player.isConnected():
                 painter.setBrush(QBrush(QColor(0, 255, 0)))
             else:
@@ -546,10 +551,10 @@ class GridRenderer(QGraphicsView):
         # ------------------------------ Events ------------------------------ #
 
         def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:
-            self._parent.setCursor(Qt.PointingHandCursor)
+            self._parent.setCursor(Qt.CursorShape.PointingHandCursor)
 
         def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
-            self._parent.setCursor(Qt.ArrowCursor)
+            self._parent.setCursor(Qt.CursorShape.ArrowCursor)
 
         def _on_player_login(self, player: Player) -> None:
             if player == self._player:

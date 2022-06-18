@@ -3,9 +3,9 @@
 import os
 from typing import Dict, List, Tuple, Union
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 
 from .. import emitters
 
@@ -17,55 +17,6 @@ from ez.pogdog.yescom.core.connection import Server
 from ez.pogdog.yescom.ui.config import UIConfig
 
 logger = Logging.getLogger("yescom.ui.window")
-
-
-def get_font_paths() -> Tuple[List[str], Dict[str, str], List[str]]:
-    """
-    Returns the paths of the fonts installed on the system.
-    https://stackoverflow.com/questions/19098440/how-to-get-the-font-file-path-with-qfont-in-qt
-
-    :return: Unloadable fonts, a dictionary of the fonts and their names, and the paths of the fonts.
-    """
-
-    font_paths = QStandardPaths.standardLocations(QStandardPaths.FontsLocation)
-
-    accounted = []
-    unloadable = []
-    family_to_path = {}
-
-    def find_fonts(path: str) -> None:
-        for file in os.listdir(path):
-            file = os.path.join(path, file)
-
-            if os.path.isdir(file):
-                find_fonts(file)
-
-            elif os.path.splitext(file)[1].lower() in (".ttf", ".otf"):
-                idx = db.addApplicationFont(file)  # Add font path
-
-                if idx < 0:
-                    unloadable.append(file)  # Font wasn't loaded if idx is -1
-                else:
-                    names = db.applicationFontFamilies(idx)  # Load back font family name
-
-                    for name in names:
-                        if name in family_to_path:
-                            accounted.append((name, file))
-                        else:
-                            family_to_path[name] = file
-
-                    # This isn't a 1:1 mapping, for example
-                    # 'C:/Windows/Fonts/HTOWERT.TTF' (regular) and
-                    # 'C:/Windows/Fonts/HTOWERTI.TTF' (italic) are different
-                    # but applicationFontFamilies will return 'High Tower Text' for both
-
-    db = QFontDatabase()
-    for font_path in font_paths:  # Go through all font paths
-        if os.path.exists(font_path):
-            find_fonts(font_path)  # Go through all files at each path
-
-    # noinspection PyTypeChecker
-    return unloadable, family_to_path, accounted
 
 
 class MainWindow(QMainWindow):
@@ -123,20 +74,20 @@ class MainWindow(QMainWindow):
             self._current_server = value
             self.server_changed.emit()
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self) -> None:
+        super().__init__()
+
         if self.__class__.INSTANCE is not None:
             raise Exception("Duplicate initialisation of MainWindow.")
         self.__class__.INSTANCE = self
-
-        super().__init__(*args, **kwargs)
 
         self.yescom = YesCom.getInstance()
         self.config = UIConfig()
 
         self.setWindowTitle("YesCom \ud83d\ude08")
 
-        logger.fine("Locating fonts...")
-        self.unloadable, self.families, self.accounted = get_font_paths()
+        # logger.fine("Locating fonts...")
+        # self.unloadable, self.families, self.accounted = get_font_paths()
 
         logger.fine("Starting event queue thread...")
         self.event_thread = EventQueueThread(self)
@@ -173,15 +124,15 @@ class MainWindow(QMainWindow):
 
         if connected_servers or connected_players:
             message_box = QMessageBox(self)
-            message_box.setIcon(QMessageBox.Question)
+            message_box.setIcon(QMessageBox.Icon.Question)
             message_box.setWindowTitle("Exit")
             message_box.setText("Are you sure you wish to exit YesCom?")
             # TODO: Trackers, tasks, etc...
             message_box.setInformativeText("There are currently %i connected player(s) over %i servers." %
                                            (connected_players, connected_servers))
-            message_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-            message_box.setDefaultButton(QMessageBox.Cancel)
-            message_box.setEscapeButton(QMessageBox.Cancel)
+            message_box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+            message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+            message_box.setEscapeButton(QMessageBox.StandardButton.Cancel)
             message_box.accepted.connect(lambda: System.exit(0))  # TODO: Proper shut down sequence?
             message_box.rejected.connect(lambda: event.setAccepted(False))
             message_box.exec()
@@ -231,7 +182,7 @@ class MainWindow(QMainWindow):
         self.smiling_imp_label.setText("\ud83d\ude08")
         layout.addWidget(self.smiling_imp_label)
 
-        layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
 
         self.servers_combo_box = QComboBox(self.central_widget)
 
@@ -325,13 +276,13 @@ class MainWindow(QMainWindow):
                 online += 1
 
         message_box = QMessageBox(self)
-        message_box.setIcon(QMessageBox.Warning)
+        message_box.setIcon(QMessageBox.Icon.Warning)
         message_box.setWindowTitle("Disconnect all")
         message_box.setText("This will disconnect %i account(s)." % online)
         message_box.setInformativeText("You will also have to enable auto reconnect for ALL players again, manually.")
-        message_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-        message_box.setDefaultButton(QMessageBox.Cancel)
-        message_box.setEscapeButton(QMessageBox.Cancel)
+        message_box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+        message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        message_box.setEscapeButton(QMessageBox.StandardButton.Cancel)
         message_box.accepted.connect(lambda: self.current_server.disconnectAll("Disconnect all", True))
         message_box.exec()
 

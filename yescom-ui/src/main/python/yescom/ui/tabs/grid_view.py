@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 
 from ..renderer.grid import GridRenderer
 from ..resources import Resources
@@ -46,7 +46,7 @@ class GridViewTab(QWidget):
         controls_layout.addWidget(dimension_label, 0, 0, 1, 1)
 
         self.dimension_combo_box = QComboBox(self)
-        self.dimension_combo_box.setSizeAdjustPolicy(QComboBox.AdjustToContentsOnFirstShow)
+        self.dimension_combo_box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContentsOnFirstShow)
         self.dimension_combo_box.currentIndexChanged.connect(self._on_dimension_changed)
 
         self.dimension_combo_box.addItem("Overworld  ", Dimension.OVERWORLD)
@@ -62,7 +62,7 @@ class GridViewTab(QWidget):
         controls_layout.addWidget(selection_label, 0, 2, 1, 1)
 
         self.selection_combo_box = QComboBox(self)
-        self.selection_combo_box.setSizeAdjustPolicy(QComboBox.AdjustToContentsOnFirstShow)
+        self.selection_combo_box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContentsOnFirstShow)
         self.selection_combo_box.currentIndexChanged.connect(self._on_selection_changed)
 
         self.selection_combo_box.addItem("None  ", GridRenderer.Selection.Mode.NONE)
@@ -70,7 +70,7 @@ class GridViewTab(QWidget):
         self.selection_combo_box.addItem("Box  ", GridRenderer.Selection.Mode.BOX)
         controls_layout.addWidget(self.selection_combo_box, 0, 3, 1, 1)
 
-        controls_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum), 0, 4, 1, 1)
+        controls_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum), 0, 4, 1, 1)
         # controls_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum), 1, 2, 1, 1)
 
         main_layout.addLayout(controls_layout)

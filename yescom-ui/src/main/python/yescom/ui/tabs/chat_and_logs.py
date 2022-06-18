@@ -5,8 +5,8 @@ import time
 import webbrowser
 from typing import Dict, List, Union
 
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtGui import *
+from PyQt6.QtWidgets import *
 
 from ..dialogs.player_info import PlayerInfoDialog
 
@@ -54,7 +54,7 @@ class ChatAndLogsTab(QWidget):
         main_layout = QVBoxLayout(self)
 
         self.tab_widget = QTabWidget(self)
-        self.tab_widget.setTabPosition(QTabWidget.South)
+        self.tab_widget.setTabPosition(QTabWidget.TabPosition.South)
 
         self._setup_chat_tab()
         self._setup_kick_logs_tab()
@@ -76,7 +76,7 @@ class ChatAndLogsTab(QWidget):
 
         self.player_combo_box = QComboBox(self.chat_tab)
         self.player_combo_box.currentIndexChanged.connect(self._on_player_selected)
-        self.player_combo_box.setFixedWidth(QApplication.fontMetrics().width("M" * 11))  # 16 is preferrable, but looks a bit much
+        self.player_combo_box.setFixedWidth(self.fontMetrics().boundingRect("M" * 11).width())  # 16 is preferrable, but looks a bit much
         message_layout.addWidget(self.player_combo_box)
 
         self.chat_message_edit = QLineEdit(self.chat_tab)
@@ -176,13 +176,13 @@ class ChatAndLogsTab(QWidget):
 
             if len(can_send) > 1:
                 message_box = QMessageBox(self)
-                message_box.setIcon(QMessageBox.Warning)
+                message_box.setIcon(QMessageBox.Icon.Warning)
                 message_box.setWindowTitle("Send on all")
                 message_box.setText("This will send a message on %i account(s)." % len(can_send))
                 message_box.setInformativeText("I don't think I need to explain why this is a dumb idea.")
-                message_box.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-                message_box.setDefaultButton(QMessageBox.Cancel)
-                message_box.setEscapeButton(QMessageBox.Cancel)
+                message_box.setStandardButtons(QMessageBox.StandardButton.Ok | QMessageBox.StandardButton.Cancel)
+                message_box.setDefaultButton(QMessageBox.StandardButton.Cancel)
+                message_box.setEscapeButton(QMessageBox.StandardButton.Cancel)
                 message_box.accepted.connect(lambda: self._send_on_all(can_send))
                 message_box.exec()
             else:
@@ -373,12 +373,12 @@ class ChatAndLogsTab(QWidget):
             position_before = cursor.position()
 
             cursor.clearSelection()
-            cursor.movePosition(QTextCursor.End)
+            cursor.movePosition(QTextCursor.MoveOperation.End)
             cursor.insertBlock()
 
             if isinstance(chat_message, str):  # YesCom status message (kicked, connected)
                 char_format = QTextCharFormat()
-                char_format.setFontWeight(QFont.Bold)
+                char_format.setFontWeight(QFont.Weight.Bold)
 
                 cursor.setCharFormat(char_format)
                 cursor.insertText(chat_message)
@@ -463,7 +463,7 @@ class ChatAndLogsTab(QWidget):
                     if code in colours:
                         char_format.setForeground(colours[code])
                     elif code == "l":  # Bold
-                        char_format.setFontWeight(QFont.Bold)
+                        char_format.setFontWeight(QFont.Weight.Bold)
                     elif code == "m":  # Strikethrough
                         char_format.setFontStrikeOut(True)
                     elif code == "n":  # Underline
@@ -495,9 +495,9 @@ class ChatAndLogsTab(QWidget):
             cursor = self.textCursor()
             position_before = cursor.position()
 
-            cursor.movePosition(QTextCursor.Start)
+            cursor.movePosition(QTextCursor.MoveOperation.Start)
             for index in range(count):
-                cursor.select(QTextCursor.BlockUnderCursor)
+                cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
                 cursor.removeSelectedText()
                 cursor.deleteChar()
 

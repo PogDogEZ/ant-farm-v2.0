@@ -4,8 +4,8 @@ import datetime
 import math
 import time
 
-from PyQt5.QtCore import *
-from PyQt5.QtWidgets import *
+from PyQt6.QtCore import *
+from PyQt6.QtWidgets import *
 
 from ..widgets.players import OnlinePlayersTree
 
@@ -42,7 +42,9 @@ class OverviewTab(QWidget):
 
         self.address_label = QLabel(self)
         self.address_label.setText("Address: (no server)")
-        self.address_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.address_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard,
+        )
         info_layout.addWidget(self.address_label)
 
         self.tickrate_label = QLabel(self)
@@ -72,7 +74,9 @@ class OverviewTab(QWidget):
         self.render_dist_label = QLabel(self)
         self.render_dist_label.setText("Render distance: 0 / 0 (0 chunks)")
         self.render_dist_label.setToolTip("Estimated server render distance.")
-        self.render_dist_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.render_dist_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard,
+        )
         info_layout.addWidget(self.render_dist_label)
 
         self.queryrate_label = QLabel(self)
@@ -81,13 +85,13 @@ class OverviewTab(QWidget):
         # self.queryrate_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
         info_layout.addWidget(self.queryrate_label)
 
-        info_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        info_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
 
         # TODO: More information (trackers, etc)
         # TODO: Current (in game) time?
 
         main_layout.addLayout(info_layout)
-        main_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+        main_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
 
         online_layout = QVBoxLayout()
 

@@ -6,7 +6,7 @@ import tempfile
 from typing import Union
 from zipfile import ZipFile
 
-from PyQt5.QtGui import *
+from PyQt6.QtGui import *
 
 from ez.pogdog.yescom.api import Logging
 

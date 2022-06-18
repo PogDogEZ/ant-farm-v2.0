@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from PyQt5.QtWidgets import *
+from PyQt6.QtWidgets import *
 
 
 class OptionsTab(QWidget):
