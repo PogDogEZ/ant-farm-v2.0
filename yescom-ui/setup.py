@@ -12,6 +12,7 @@ setup(
     install_requires=[
         "bresenham",
         "PyQt6",
+        "requests",
         "numpy",
         "jep",
     ],

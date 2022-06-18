@@ -37,7 +37,7 @@ public class Bootstrap {
         }
 
         // Mhmmmmmmmmmmmmmmmmm
-        if (System.getProperty("os.name").startsWith("win")) jarPath = jarPath.replaceFirst("/+", "");
+        if (System.getProperty("os.name").toLowerCase().startsWith("win")) jarPath = jarPath.replaceFirst("/+", "");
         return jarPath;
     }
 }
