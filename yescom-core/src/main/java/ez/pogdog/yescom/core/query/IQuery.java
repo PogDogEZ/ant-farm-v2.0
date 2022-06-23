@@ -21,7 +21,8 @@ public interface IQuery<T extends IQueryHandle> {
     void tick(T handle);
 
     /**
-     * Called when this query is cancelled.
+     * Called when this query is cancelled. Use {@link ez.pogdog.yescom.core.connection.Server#cancel(IQuery)} to
+     * cancel a query if the {@link IQueryHandle} is not known directly.
      * @param handle The handle the query was dispatched by.
      */
     @SuppressWarnings("unchecked")

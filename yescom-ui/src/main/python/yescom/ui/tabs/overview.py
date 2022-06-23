@@ -80,10 +80,14 @@ class OverviewTab(QWidget):
         info_layout.addWidget(self.render_dist_label)
 
         self.queryrate_label = QLabel(self)
-        self.queryrate_label.setText("Queryrate: 0.0qps")
-        self.queryrate_label.setToolTip("The current rate of queries being sent to the server.")
-        # self.queryrate_label.setTextInteractionFlags(Qt.TextSelectableByMouse | Qt.TextSelectableByKeyboard)
+        self.queryrate_label.setText("Queryrate(E/A): 0.0qps / 0.0qps")
+        self.queryrate_label.setToolTip("The current effective and actual rates of queries being processed.")
         info_layout.addWidget(self.queryrate_label)
+
+        self.queries_label = QLabel(self)
+        self.queries_label.setText("Queries(W/T): 0 / 0")
+        self.queries_label.setToolTip("The number of queries waiting to be processed and the number of queries being processed.")
+        info_layout.addWidget(self.queries_label)
 
         info_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
 
@@ -91,12 +95,14 @@ class OverviewTab(QWidget):
         # TODO: Current (in game) time?
 
         main_layout.addLayout(info_layout)
-        main_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+        main_layout.addItem(QSpacerItem(60, 20, QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Minimum))
 
         online_layout = QVBoxLayout()
 
-        online_players_list = OnlinePlayersTree(self)
-        online_layout.addWidget(online_players_list)
+        online_players_tree = OnlinePlayersTree(self)
+        # online_players_tree.setSizePolicy(QSizePolicy.Policy.)
+        # online_players_tree.setMaximumWidth(online_players_tree.fontMetrics().boundingRect("M" * 50).width())
+        online_layout.addWidget(online_players_tree)
 
         buttons_layout = QHBoxLayout()
 
@@ -123,7 +129,7 @@ class OverviewTab(QWidget):
     # ------------------------------ Events ------------------------------ #
 
     def _on_tick(self) -> None:
-        if time.time() - self._last_update < .1:  # Don't want it to update too fast
+        if time.time() - self._last_update < .075:  # Don't want it to update too fast
             return
         self._last_update = time.time()
         current = self.main_window.current_server
@@ -134,20 +140,27 @@ class OverviewTab(QWidget):
         tslp = "0"
         uptime = "0:00:00"
         render_distance = 0
-        queryrate = 0.0
+        queryrate_e = 0.0
+        queryrate_a = 0.0
+        waiting = 0
+        ticking = 0
 
         if current is not None:
             address = "%s:%i" % (current.hostname, current.port)
             if current.isConnected():
-                tickrate = current.getTPS()
-                ping = current.getPing()
-                tslp = max(1, current.getTSLP())
-                if tslp > current.HIGH_TSLP.value:
-                    tslp = str(tslp)
-                else:
-                    tslp = "<%i" % (math.ceil(tslp / 50) * 50)
-                uptime = str(datetime.timedelta(seconds=current.getConnectionTime()))
-                queryrate = current.getQPS()
+                with current.synchronized():
+                    tickrate = current.getTPS()
+                    ping = current.getPing()
+                    tslp = max(1, current.getTSLP())
+                    if tslp > current.HIGH_TSLP.value:
+                        tslp = str(tslp)
+                    else:
+                        tslp = "<%i" % (math.ceil(tslp / 50) * 50)
+                    uptime = str(datetime.timedelta(seconds=current.getConnectionTime()))
+                    queryrate_e = current.getEffectiveQPS()
+                    queryrate_a = current.getActualQPS()
+                    waiting = current.getWaitingSize()
+                    ticking = current.getProcessingSize()
 
             render_distance = current.getRenderDistance()
 
@@ -156,10 +169,11 @@ class OverviewTab(QWidget):
         self.ping_label.setText("Ping: %.1fms" % ping)
         self.tslp_label.setText("TSLP: %sms" % tslp)
         self.uptime_label.setText("Uptime: %s" % uptime)
-        self.render_dist_label.setText("Render distance: %i / %i (%i chunks)" % (
-            max(0, (render_distance - 1) // 2), render_distance, render_distance ** 2,
+        self.render_dist_label.setText("Render distance: %i chunks / %i chunks" % (
+            max(0, (render_distance - 1) // 2), render_distance,  #, render_distance ** 2,
         ))
-        self.queryrate_label.setText("Queryrate: %.1fqps" % queryrate)
+        self.queryrate_label.setText("Queryrate(E/A): %.1fqps / %.1fqps" % (queryrate_e, queryrate_a))
+        self.queries_label.setText("Queries(W/T): %i / %i" % (waiting, ticking))
 
         self.disconnect_all_button.setEnabled(current is not None and current.isConnected())
 

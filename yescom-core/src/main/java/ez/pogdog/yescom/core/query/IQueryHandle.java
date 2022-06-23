@@ -47,14 +47,25 @@ public interface IQueryHandle<T extends IQuery> extends ITickable {
 
     /**
      * @param ahead The time look ahead for, in ticks.
-     * @return The maximum number of queries that could be processed in the given time.
+     * @return The maximum number of queries that could possibly be processed in the given time.
+     */
+    float getMaxThroughputFor(int ahead);
+
+    /**
+     * @param ahead The time look ahead for, in ticks.
+     * @return The maximum number of queries that can be processed in the given time (taking into account the current rate).
      */
     float getThroughputFor(int ahead);
 
     /**
-     * @return The number of queries being processed per second.
+     * @return The number of queries being effectively processed per second.
      */
-    float getQPS();
+    float getEffectiveQPS();
+
+    /**
+     * @return The number of queries being finalised per second.
+     */
+    float getActualQPS();
 
     /**
      * @return The number of queries waiting to be processed.

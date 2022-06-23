@@ -74,7 +74,7 @@ public class Player implements IConfig, ITickable {
             true
     );
     public final Option<Boolean> DISABLE_AUTO_RECONNECT_ON_LOGOUT = new Option<>(
-            "Disable auto reconnect on logout",
+            "Disable on logout",
             "Disables auto reconnect on logout (due to low health or players entering visual range).",
             false
     );
@@ -213,6 +213,7 @@ public class Player implements IConfig, ITickable {
             }
 
         } else {
+            session = null;
             boolean autoReconnectReady = System.currentTimeMillis() - lastLoginTime > server.AUTO_RECONNECT_TIME.value;
             boolean autoLogoutReady = System.currentTimeMillis() - lastAutoLogoutTime >= this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
             if (AUTO_RECONNECT.value && server.canLogin() && !server.isOnline(getUUID()) &&
@@ -269,7 +270,7 @@ public class Player implements IConfig, ITickable {
                 logger.warning(String.format("Failed to connect %s to %s:%d: %s", getUsername(), server.hostname, server.port, error.getMessage()));
                 logger.throwing(getClass().getSimpleName(), "connect", error);
 
-                --failedConnections; // Server might be down, don't waste time waiting for it, we want to reconncet ASAP
+                --failedConnections; // Server might be down, don't waste time waiting for it, we want to reconnect ASAP
 
                 // lastLoginTime += server.AUTO_RECONNECT_TIME.value * (long)failedConnections++; // Don't spam connection attempts
             }
@@ -291,7 +292,7 @@ public class Player implements IConfig, ITickable {
      * Sends a packet to the server, duh.
      */
     public void send(Packet packet) {
-        if (isConnected()) session.send(packet);
+        if (session != null) session.send(packet);
     }
 
     /**
@@ -299,7 +300,7 @@ public class Player implements IConfig, ITickable {
      * @param message The message to send.
      */
     public void chat(String message) {
-        if (isConnected()) session.send(new ClientChatPacket(message));
+        if (session != null) session.send(new ClientChatPacket(message));
     }
 
     /* ------------------------------ Setters and getters ------------------------------ */
@@ -336,7 +337,7 @@ public class Player implements IConfig, ITickable {
     }
 
     public Position getPosition() {
-        return position.clone();
+        return position; // .clone();
     }
 
     public void setPosition(Position position) {
@@ -356,7 +357,7 @@ public class Player implements IConfig, ITickable {
     }
 
     public Angle getAngle() {
-        return angle.clone();
+        return angle; // .clone();
     }
 
     public void setAngle(Angle angle) {
@@ -417,7 +418,7 @@ public class Player implements IConfig, ITickable {
      * @return Time since last packet, in milliseconds.
      */
     public int getTSLP() {
-        if (!isConnected()) return 0;
+        if (session == null) return 0;
         return (int)(System.currentTimeMillis() - lastPacketTime);
     }
 

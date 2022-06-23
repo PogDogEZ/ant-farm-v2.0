@@ -131,7 +131,8 @@ public class Server implements IConfig, ITickable {
     private int tslp;
     private float ping;
 
-    private float queriesPerSecond;
+    private float effectiveQPS;
+    private float actualQPS;
     private int waitingSize;
     private int processingSize;
 
@@ -204,7 +205,7 @@ public class Server implements IConfig, ITickable {
      * Ticks this server.
      */
     @Override
-    public void tick() {
+    public synchronized void tick() {
         Set<IAccount> accounts = yesCom.accountHandler.getAvailableAccounts();
         if (!accounts.isEmpty()) {
             int loggedIn = 0;
@@ -318,27 +319,31 @@ public class Server implements IConfig, ITickable {
             connectionTime = System.currentTimeMillis();
         }
 
-        queriesPerSecond = 0.0f;
+        effectiveQPS = 0.0f;
+        actualQPS = 0.0f;
         waitingSize = 0;
         processingSize = 0;
         // TODO: Calculate loss rates too
 
         for (IQueryHandle<?> handle : handles) {
             handle.tick();
-            queriesPerSecond += handle.getQPS();
+            effectiveQPS += handle.getEffectiveQPS();
+            actualQPS += handle.getActualQPS();
             waitingSize += handle.getWaitingSize();
             processingSize += handle.getProcessingSize();
         }
 
-        if (!handles.isEmpty()) queriesPerSecond /= handles.size();
+        // if (!handles.isEmpty()) queriesPerSecond /= handles.size();
 
         for (Map.Entry<UUID, Long> entry : recentDeaths.entrySet()) { // FIXME: Could lag mess with this?
             if (System.currentTimeMillis() - entry.getValue() > 100) recentDeaths.remove(entry.getKey()); // Remove expired recent deaths
         }
 
         if (System.currentTimeMillis() - lastStatsTime > 60000) {
-            logger.finer(String.format("Server %s:%d stats: %d player(s), %d/%d queries, %.1f tps, %.1f ping, %.1f qps.",
-                    hostname, port, players.size(), processingSize, waitingSize, tickrate, ping, queriesPerSecond));
+            logger.finer(String.format(
+                    "Server %s:%d stats: %d player(s), %d/%d queries, %.1f tps, %.1f ping, %.1f qps.",
+                    hostname, port, players.size(), processingSize, waitingSize, tickrate, ping, effectiveQPS
+            ));
             lastStatsTime = System.currentTimeMillis();
         }
 
@@ -654,8 +659,12 @@ public class Server implements IConfig, ITickable {
     /**
      * @return The cumulative queries per second of all handles for this server.
      */
-    public float getQPS() {
-        return queriesPerSecond;
+    public float getEffectiveQPS() {
+        return effectiveQPS;
+    }
+
+    public float getActualQPS() { // TODO: Improve javadoc
+        return actualQPS;
     }
 
     /**
