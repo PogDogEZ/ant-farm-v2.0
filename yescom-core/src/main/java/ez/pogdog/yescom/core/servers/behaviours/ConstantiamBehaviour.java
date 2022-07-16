@@ -7,6 +7,8 @@ import com.google.gson.JsonObject;
 import ez.pogdog.yescom.YesCom;
 import ez.pogdog.yescom.api.Globals;
 import ez.pogdog.yescom.api.Logging;
+import ez.pogdog.yescom.api.data.ChunkPosition;
+import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.api.data.chat.ChatMessage;
 import ez.pogdog.yescom.api.data.chat.CommandMessage;
 import ez.pogdog.yescom.api.data.chat.DeathMessage;
@@ -16,6 +18,7 @@ import ez.pogdog.yescom.api.data.chat.RegularMessage;
 import ez.pogdog.yescom.api.data.chat.WhisperMessage;
 import ez.pogdog.yescom.api.data.player.PlayerInfo;
 import ez.pogdog.yescom.api.data.player.death.Death;
+import ez.pogdog.yescom.api.data.tracking.Highway;
 import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.config.Option;
 import ez.pogdog.yescom.core.connection.Player;
@@ -181,6 +184,19 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
     }
 
     @Override
+    public Set<Highway> getHighways() {
+        Set<Highway> highways = new HashSet<>();
+
+        // Overworld highways
+
+        // Nether highways (https://www.desmos.com/calculator/8mn8diwavz, thanks CHB <3)
+
+        // End highways
+
+        return highways;
+    }
+
+    @Override
     public synchronized void tick() {
         if (!server.isConnected()) {
             processingDisconnects.clear();
@@ -294,6 +310,8 @@ public class ConstantiamBehaviour implements IServerBehaviour, IConfig {
 
     @Override
     public synchronized void processLeave(PlayerInfo info) {
+        // FIXME: Bug without logout detection when TPing, look into it
+
         if (recentDeaths.containsKey(info.uuid)) { // The player just died, don't handle as a disconnect
             recentDeaths.remove(info.uuid);
         } else if (recentLeaves.containsKey(info.uuid)) { // We can be sure that they just left

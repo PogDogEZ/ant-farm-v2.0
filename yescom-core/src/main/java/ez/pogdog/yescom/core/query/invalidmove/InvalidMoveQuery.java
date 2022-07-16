@@ -35,11 +35,6 @@ public class InvalidMoveQuery extends IsLoadedQuery<InvalidMoveHandle> {
     }
 
     @Override
-    public Dimension getDimension(IQueryHandle<? extends IQuery> handle) {
-        return handle.getDimension();
-    }
-
-    @Override
     public ChunkState getState() {
         return new ChunkState(position, dimension, state);
     }

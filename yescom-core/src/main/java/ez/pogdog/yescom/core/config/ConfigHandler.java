@@ -75,7 +75,10 @@ public class ConfigHandler implements ITickable {
                         Map<String, Object> map = Globals.YAML.load(inputStream);
                         if (map != null /* && !map.containsValue(null) */) {
                             String name = file.getName().substring(0, file.getName().length() - 4);
-                            values.put(name, map);
+                            Map<String, Object> options = values.computeIfAbsent(name, name1 -> new HashMap<>());
+                            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                                if (entry.getKey() != null && entry.getValue() != null) options.put(entry.getKey(), entry.getValue());
+                            }
                         } else {
                             logger.warning(String.format("Couldn't read configuration %s.", file.getName()));
                         }

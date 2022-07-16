@@ -83,9 +83,6 @@ public class Emitters {
      */
     public static final Emitter<PlayerChat> ON_PLAYER_CHAT = new Emitter<>(PlayerChat.class);
 
-    public static final Emitter<PlayerPacket> ON_PLAYER_PACKET_IN = new Emitter<>(PlayerPacket.class);
-    public static final Emitter<PlayerPacket> ON_PLAYER_PACKET_OUT = new Emitter<>(PlayerPacket.class);
-
     /**
      * Fired when a player is removed.
      */
@@ -143,18 +140,18 @@ public class Emitters {
     /**
      * Fired when a new scanner is applied to a server.
      */
-    public static final Emitter<ServerScanner> ON_SCANNER_ADDED = new Emitter<>(ServerScanner.class);
-    // public static final Emitter<ServerScanner> ON_SCANNER_REMOVED = new Emitter<>(ServerScanner.class);
+    public static final Emitter<IScanner> ON_SCANNER_ADDED = new Emitter<>(IScanner.class);
+    // public static final Emitter<IScanner> ON_SCANNER_REMOVED = new Emitter<>(IScanner.class);
 
     /**
      * Fired when a new task is added to a server.
      */
-    public static final Emitter<ServerTask> ON_TASK_ADDED = new Emitter<>(ServerTask.class);
+    public static final Emitter<ITask> ON_TASK_ADDED = new Emitter<>(ITask.class);
 
     /**
      * Fired when a task is removed from a server.
      */
-    public static final Emitter<ServerTask> ON_TASK_REMOVED = new Emitter<>(ServerTask.class);
+    public static final Emitter<ITask> ON_TASK_REMOVED = new Emitter<>(ITask.class);
 
     /**
      * Fired when a chunk state has been resolved for a given server.
@@ -242,28 +239,6 @@ public class Emitters {
             super(info, server);
 
             this.death = death;
-        }
-    }
-
-    public static class ServerScanner {
-
-        public final Server server;
-        public final IScanner scanner;
-
-        public ServerScanner(Server server, IScanner scanner) {
-            this.server = server;
-            this.scanner = scanner;
-        }
-    }
-
-    public static class ServerTask {
-
-        public final Server server;
-        public final ITask task;
-
-        public ServerTask(Server server, ITask task) {
-            this.server = server;
-            this.task = task;
         }
     }
 

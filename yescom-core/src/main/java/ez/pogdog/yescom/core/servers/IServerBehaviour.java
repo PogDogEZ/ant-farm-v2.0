@@ -1,12 +1,16 @@
 package ez.pogdog.yescom.core.servers;
 
 import com.github.steveice10.mc.protocol.packet.ingame.server.ServerChatPacket;
-import ez.pogdog.yescom.api.data.player.PlayerInfo;
+import ez.pogdog.yescom.api.data.ChunkPosition;
+import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.api.data.chat.ChatMessage;
+import ez.pogdog.yescom.api.data.player.PlayerInfo;
+import ez.pogdog.yescom.api.data.tracking.Highway;
 import ez.pogdog.yescom.core.ITickable;
 import ez.pogdog.yescom.core.connection.Player;
 import ez.pogdog.yescom.core.connection.Server;
 
+import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -29,6 +33,11 @@ public interface IServerBehaviour extends ITickable {
      * @return The behaviours that this behaviour overrides.
      */
     Set<Class<? extends IServerBehaviour>> getOverrides();
+
+    /**
+     * @return A list of {@link Highway}s for this server.
+     */
+    Set<Highway> getHighways(); // TODO: Loadable from a file?
 
     /**
      * Ticks this behaviour.

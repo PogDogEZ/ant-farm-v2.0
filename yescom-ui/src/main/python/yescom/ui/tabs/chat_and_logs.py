@@ -8,7 +8,7 @@ from typing import Dict, List, Union
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import *
 
-from ..dialogs.player_info import PlayerInfoDialog
+from ..dialogs.players import PlayerInfoDialog
 
 from java.util import UUID
 

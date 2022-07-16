@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
-from typing import Tuple, Union
+from typing import Dict, Tuple, Union
 
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import *
 
+from ..widgets.options import OptionsItem
 from ..widgets.players import AbstractPlayersTree, OfflinePlayersTree
 
 from java.util import UUID
@@ -37,9 +38,7 @@ class PlayersTab(QWidget):
 
         self._setup_tab()
 
-        self.main_window.server_changed.connect(self._on_server_changed)
-        self.main_window.connection_established.connect(self._on_server_changed)
-        self.main_window.connection_lost.connect(self._on_server_changed)
+        self.main_window.tick.connect(self._on_tick)
 
         self.main_window.account_added.connect(self._on_account_added)
         self.main_window.account_error.connect(self._on_account_error)
@@ -109,8 +108,8 @@ class PlayersTab(QWidget):
 
         players_layout = QVBoxLayout()
 
-        self.players_tree = OfflinePlayersTree(self)
-        players_layout.addWidget(self.players_tree)
+        players_tree = OfflinePlayersTree(self)
+        players_layout.addWidget(players_tree)
 
         # manage_players = QPushButton(self)
         # manage_players.setText("Manage players")
@@ -121,7 +120,7 @@ class PlayersTab(QWidget):
 
     # ------------------------------ Events ------------------------------ #
 
-    def _on_server_changed(self) -> None:
+    def _on_tick(self) -> None:
         self.disconnect_all_button.setEnabled(
             self.main_window.current_server is not None and self.main_window.current_server.isConnected()
         )
@@ -152,7 +151,7 @@ class PlayersTab(QWidget):
             self.password_edit.setEnabled(True)
             self.password_edit.clear()
 
-            QApplication.setOverrideCursor(Qt.CursorShape.ArrowCursor)
+            QApplication.restoreOverrideCursor()
 
     def _on_username_changed(self, text: str) -> None:
         self.mojang_login_button.setEnabled(len(text) > 3 and len(self.password_edit.text()) > 3)
@@ -235,12 +234,14 @@ class PlayersTab(QWidget):
 
             self._connect_thread: Union[PlayersTab.ConnectThread, None] = None
 
-            self.main_window.player_added.connect(self._on_player_added)
-            self.main_window.player_removed.connect(self._on_player_removed)
-
             for server in self.yescom.servers:  # Players from accounts.txt will already exist by now, so need to add them
                 for player in server.getPlayers():
                     self._on_player_added(player)
+
+            self.main_window.server_changed.connect(lambda: QTimer.singleShot(50, self._update_count))
+
+            self.main_window.player_added.connect(self._on_player_added)
+            self.main_window.player_removed.connect(self._on_player_removed)
 
         # ------------------------------ Events ------------------------------ #
 
@@ -289,6 +290,9 @@ class PlayersTab(QWidget):
 
             super().__init__(parent, info)
 
+            # Showing if an account is trusted or not is kinda redundant
+            self.main_window.trust_state_changed.disconnect(self._on_trust_state_changed)
+
             # self.connected_tooltip = self.connected_tooltip % (
             #     player.getUsername(), player.server.hostname, player.server.port,
             # )
@@ -296,17 +300,18 @@ class PlayersTab(QWidget):
             #     player.getUsername(), player.server.hostname, player.server.port,
             # )
 
+            self._on_server_changed()  # Update hidden
+
             self._on_position_update(player)
             self._on_health_update(player)
             self._on_server_stats_update(player)
 
             self._on_login(player)
-            self._on_server_change()  # Update hidden
 
             # TODO: Last position if logged out
             # TODO: Failed connection attempts
 
-            self.main_window.server_changed.connect(self._on_server_change)
+            self.main_window.server_changed.connect(self._on_server_changed)
 
             self.main_window.player_login.connect(self._on_login)
             self.main_window.player_logout.connect(self._on_logout)
@@ -359,7 +364,19 @@ class PlayersTab(QWidget):
             self.debug_child.addChild(self.chunks_child)
             self.addChild(self.debug_child)
 
-        def apply_to_context_menu(self, context_menu: QMenu) -> None:
+            # self.offline_child = QTreeWidgetItem(self, ["Offline"])
+            # self.offline_child.setToolTip(0, "Information about the player from when they were last online.")
+            # self.last_position_child = QTreeWidgetItem(self.offline_child, ["Last position:"])
+            # self.offline_child.addChild(self.last_position_child)
+            # self.last_health_child = QTreeWidgetItem(self, ["Last health:"])
+            # self.offline_child.addChild(self.last_health_child)
+            # self.last_hunger_child = QTreeWidgetItem(self, ["Last hunger:"])
+            # self.offline_child.addChild(self.last_hunger_child)
+            # self.addChild(self.offline_child)
+
+            self.addChild(OptionsItem(self, self.player))
+
+        def apply_to_context_menu(self, context_menu: QMenu, clicked_child: QTreeWidgetItem) -> None:
             context_menu.addAction("Manage account...")  # TODO: Managing accounts
 
             auto_reconnect = context_menu.addAction("Auto reconnect", lambda: self._toggle(self.player.AUTO_RECONNECT))
@@ -377,14 +394,19 @@ class PlayersTab(QWidget):
             context_menu.addSeparator()  # To make clear that the above are exclusive to each other
 
             connect = context_menu.addAction("Connect", self._connect)
-            connect.setEnabled(self.parent_._connect_thread is None and not self.player.isConnected())
+            connect.setIcon(self.main_window.style().standardIcon(QStyle.StandardPixmap.SP_ArrowForward))
+            connect.setEnabled(
+                self.parent_._connect_thread is None and not self.player.isConnected() and not self.player.isConnecting(),
+            )
             # connect.setToolTip("Connects this player to the currently selected server.")
 
             disconnect = context_menu.addAction("Disconnect", lambda: self.player.disconnect("User disconnect"))
+            disconnect.setIcon(self.main_window.style().standardIcon(QStyle.StandardPixmap.SP_BrowserStop))
             disconnect.setEnabled(self.player.isConnected())
             # disconnect.setToolTip("Disconnects this player from the currently selected server.")
 
             remove = context_menu.addAction("Remove", self._remove)
+            remove.setIcon(self.main_window.style().standardIcon(QStyle.StandardPixmap.SP_DialogDiscardButton))
             remove.setEnabled(self.player.server.hasPlayer(self.player))
             # remove.setEnabled(self.yescom.accountHandler.hasAccount(player.account))
             # remove.setToolTip("Removes this player's account from the account cache.")
@@ -421,13 +443,16 @@ class PlayersTab(QWidget):
 
             # TODO: Goto player, view disconnect logs, view chat
 
+        def on_user_selected(self) -> None:
+            ...  # TODO: Manage account
+
         # ------------------------------ Events ------------------------------ #
 
         def _on_skin_resolved(self, resolved: Tuple[UUID, QPixmap]) -> None:
             if resolved[0] == self.player.getUUID():
                 self.setIcon(0, QIcon(resolved[1]))
 
-        def _on_server_change(self) -> None:
+        def _on_server_changed(self) -> None:
             self.setHidden(self.main_window.current_server != self.player.server)
 
         def _on_login(self, player: Player) -> None:  # Not strictly on login, who cares though
@@ -443,7 +468,7 @@ class PlayersTab(QWidget):
                     self.setForeground(0, QColor(*self.main_window.config.OFFLINE_COLOUR.value))
 
                 self.connected_child.setText(1, str(connected))
-                self.connected_child.setToolTip(1, self.child(1).text(1))
+                self.connected_child.setToolTip(1, self.connected_child.text(1))
 
                 self.location_child.setHidden(not connected)
                 self.position_child.setHidden(not connected)
@@ -515,7 +540,7 @@ class PlayersTab(QWidget):
             Connects a player to the currently selected server.
             """
 
-            if self.parent_._connect_thread is None and not self.player.isConnected():
+            if self.parent_._connect_thread is None and not self.player.isConnected() and not self.player.isConnecting():
                 QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
                 self.parent_._connect_thread = PlayersTab.ConnectThread(self.parent_, self.player)
                 self.parent_._connect_thread.finished.connect(self.parent_._on_connect)
@@ -532,7 +557,11 @@ class PlayersTab(QWidget):
             if self.player.isConnected():
                 self.player.disconnect("Removed by user")
             self.player.server.removePlayer(self.player)
-            QMessageBox.information(self.parent_, "Success", "The player %r's account has been removed." % self.player.getUsername())
+            QMessageBox.information(
+                self.parent_, 
+                "Success", 
+                "The player %r's account has been removed." % self.player.getUsername(),
+            )
 
     class ConnectThread(QThread):
         """

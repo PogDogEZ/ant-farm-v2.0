@@ -7,6 +7,7 @@ import ez.pogdog.yescom.api.data.Dimension;
 import ez.pogdog.yescom.core.Emitters;
 import ez.pogdog.yescom.core.ITickable;
 import ez.pogdog.yescom.core.connection.Server;
+import ez.pogdog.yescom.core.query.IQueryHandle;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveQuery;
 
@@ -30,7 +31,42 @@ public class ChunkHandler {
         Emitters.ON_CHUNK_STATE.emit(new Emitters.ServerChunkState(server, state));
     }
 
+    /* ------------------------------ Other methods ------------------------------ */
+
+    private IQueryHandle<? extends IsLoadedQuery<?>> getHandle(Server server, Dimension dimension) {
+        if (server.DIGGING_ENABLED.value) { // TODO: Digging queries
+        }
+
+        if (server.INVALID_MOVE_ENABLED.value) {
+            InvalidMoveHandle handle;
+            switch (dimension) {
+                default:
+                case OVERWORLD: {
+                    return server.overworldInvalidMoveHandle;
+                }
+                case NETHER: {
+                    return server.netherInvalidMoveHandle;
+                }
+                case END: {
+                    return server.endInvalidMoveHandle;
+                }
+            }
+        }
+
+        return null;
+    }
+
     /* ------------------------------ Public API ------------------------------ */
+
+    /**
+     * @param ahead The number of ticks to look ahead.
+     * @return The maximum query throughput that could be possible for the given amount of ticks ahead of time.
+     */
+    public float getMaxThroughputFor(Server server, Dimension dimension, int ahead) {
+        IQueryHandle<? extends IsLoadedQuery<?>> handle = getHandle(server, dimension);
+        if (handle != null) return handle.getMaxThroughputFor(ahead);
+        return 0.0f;
+    }
 
     /**
      * Requests that a {@link ChunkState} be resolved.
@@ -52,33 +88,16 @@ public class ChunkHandler {
             long expiry,
             Consumer<IsLoadedQuery<?>> callback
     ) {
-        if (server.DIGGING_ENABLED.value) { // TODO: Digging queries
-        }
-
         if (server.INVALID_MOVE_ENABLED.value) {
-            InvalidMoveHandle handle;
-            switch (dimension) {
-                default:
-                case OVERWORLD: {
-                    handle = server.overworldInvalidMoveHandle;
-                    break;
-                }
-                case NETHER: {
-                    handle = server.netherInvalidMoveHandle;
-                    break;
-                }
-                case END: {
-                    handle = server.endInvalidMoveHandle;
-                    break;
-                }
+            InvalidMoveHandle handle = (InvalidMoveHandle)getHandle(server, dimension);
+            if (handle != null) { // Uh, why would this happen?
+                InvalidMoveQuery query = new InvalidMoveQuery(position, dimension, expected, priority, expiry);
+                handle.dispatch(query, query1 -> {
+                    if (callback != null) callback.accept(query1);
+                    queryCallback(server, query1.getState());
+                });
+                return query;
             }
-
-            InvalidMoveQuery query = new InvalidMoveQuery(position, dimension, expected, priority, expiry);
-            handle.dispatch(query, query1 -> {
-                if (callback != null) callback.accept(query1);
-                queryCallback(server, query1.getState());
-            });
-            return query;
         }
 
         return null;

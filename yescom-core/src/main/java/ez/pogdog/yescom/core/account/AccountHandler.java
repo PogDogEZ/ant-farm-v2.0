@@ -29,7 +29,7 @@ public class AccountHandler {
     private final Map<IAccount, Long> accounts = Collections.synchronizedMap(new HashMap<>());
     private final Set<IAccount> firstTime = new HashSet<>();
     private final Pattern accountPattern = Pattern.compile(
-            "((?<type>(mojang|microsoft))( *):)?( *)(?<email>\\w+@(\\w+\\.\\w+)+)( *):( *)(?<password>.+)"
+            "((?<type>(mojang|microsoft))( *):)?( *)(?<email>\\w.+@(.+\\..+)+)( *):( *)(?<password>.+)"
     );
 
     private final String accountsFile;
@@ -58,10 +58,10 @@ public class AccountHandler {
                 String password = matcher.group("password");
 
                 IAccount account;
-                if (type == null || type.equals("mojang")) {
-                    account = new Mojang(email, password);
-                } else {
+                if (type == null || type.equals("microsoft")) {
                     account = new Microsoft(email, password);
+                } else {
+                    account = new Mojang(email, password);
                 }
 
                 addAccount(account);

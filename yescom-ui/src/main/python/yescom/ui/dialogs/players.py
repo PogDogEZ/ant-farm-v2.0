@@ -16,7 +16,7 @@ from ez.pogdog.yescom.api.data.player.death import Death, Kill
 from ez.pogdog.yescom.core import Emitters
 from ez.pogdog.yescom.core.connection import Server
 
-logger = Logging.getLogger("yescom.ui.dialogs.player_info")
+logger = Logging.getLogger("yescom.ui.dialogs.players")
 
 
 class PlayerInfoDialog(QDialog):

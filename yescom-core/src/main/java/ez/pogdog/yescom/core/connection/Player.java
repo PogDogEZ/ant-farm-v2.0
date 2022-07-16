@@ -92,6 +92,8 @@ public class Player implements IConfig, ITickable {
 
     /* ------------------------------ Other fields ------------------------------ */
 
+    public final List<IPacketListener> packetListeners = new ArrayList<>();
+
     public final Server server;
     public final IAccount account;
 
@@ -127,6 +129,8 @@ public class Player implements IConfig, ITickable {
 
     private UUID uuid = null;
     private String username = "<unknown>";
+
+    private boolean connecting = false;
 
     private long lastLoginTime;
     private long lastAutoLogoutTime;
@@ -213,7 +217,6 @@ public class Player implements IConfig, ITickable {
             }
 
         } else {
-            session = null;
             boolean autoReconnectReady = System.currentTimeMillis() - lastLoginTime > server.AUTO_RECONNECT_TIME.value;
             boolean autoLogoutReady = System.currentTimeMillis() - lastAutoLogoutTime >= this.server.AUTO_LOGOUT_RECONNECT_TIME.value;
             if (AUTO_RECONNECT.value && server.canLogin() && !server.isOnline(getUUID()) &&
@@ -228,7 +231,9 @@ public class Player implements IConfig, ITickable {
      * Connects this player to the server, if they are not connected already.
      */
     public void connect() {
-        if (!isConnected() && server.hasPlayer(this)) {
+        // TODO: Limit to one connection attempt at a time
+        if (!isConnected() && !connecting && server.hasPlayer(this)) {
+            connecting = true;
             lastLoginTime = System.currentTimeMillis();
 
             try {
@@ -273,6 +278,9 @@ public class Player implements IConfig, ITickable {
                 --failedConnections; // Server might be down, don't waste time waiting for it, we want to reconnect ASAP
 
                 // lastLoginTime += server.AUTO_RECONNECT_TIME.value * (long)failedConnections++; // Don't spam connection attempts
+
+            } finally {
+                connecting = false;
             }
         }
     }
@@ -285,6 +293,7 @@ public class Player implements IConfig, ITickable {
         if (isConnected()) {
             lastLoginTime = System.currentTimeMillis(); // So we don't instantly log back in again
             session.disconnect(reason);
+            session = null;
         }
     }
 
@@ -415,6 +424,20 @@ public class Player implements IConfig, ITickable {
     }
 
     /**
+     * @return Is this player currently connecting to the server?
+     */
+    public boolean isConnecting() {
+        return connecting;
+    }
+
+    /**
+     * @return The number of failed connection attempts this player has made.
+     */
+    public int getFailedConnections() {
+        return failedConnections;
+    }
+
+    /**
      * @return Time since last packet, in milliseconds.
      */
     public int getTSLP() {
@@ -435,14 +458,35 @@ public class Player implements IConfig, ITickable {
 
     /* ------------------------------ Classes ------------------------------ */
 
+    /**
+     * Listens to received {@link Packet}s.
+     */
+    public interface IPacketListener {
+
+        /**
+         * Called when a {@link Packet} is received.
+         * @param packet The packet that was received.
+         */
+        void packetIn(Packet packet);
+
+        /**
+         * Called when a {@link Packet} is sent.
+         * @param packet The packet that was sent.
+         */
+        void packetOut(Packet packet);
+    }
+
     private class PlayerSessionAdapter extends SessionAdapter {
         @Override
         public void packetReceived(PacketReceivedEvent event) {
-            Emitters.ON_PLAYER_PACKET_IN.emit(new Emitters.PlayerPacket(Player.this, event.getPacket()));
+            synchronized (packetListeners) {
+                for (IPacketListener listener : packetListeners) listener.packetIn(event.getPacket());
+            }
 
             // Paper has async chat
             if (!(event.getPacket() instanceof ServerChatPacket)) {
                 lastPacketTime = System.currentTimeMillis();
+
             } else {
                 // For checking that this actually works lol
                 logger.finest(String.format(
@@ -605,7 +649,8 @@ public class Player implements IConfig, ITickable {
 
         @Override
         public void packetSent(PacketSentEvent event) {
-            Emitters.ON_PLAYER_PACKET_OUT.emit(new Emitters.PlayerPacket(Player.this, event.getPacket()));
+            // FIXME: Optimise
+            for (IPacketListener listener : new ArrayList<>(packetListeners)) listener.packetOut(event.getPacket());
         }
 
         @Override

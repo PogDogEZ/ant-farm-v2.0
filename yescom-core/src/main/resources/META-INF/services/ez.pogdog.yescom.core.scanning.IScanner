@@ -1,0 +1,3 @@
+ez.pogdog.yescom.core.scanning.scanners.HighwayScanner
+ez.pogdog.yescom.core.scanning.scanners.SpiralScanner
+ez.pogdog.yescom.core.scanning.scanners.StaticScanner

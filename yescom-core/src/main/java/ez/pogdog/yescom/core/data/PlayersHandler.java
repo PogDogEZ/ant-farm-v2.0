@@ -51,7 +51,7 @@ public class PlayersHandler implements IConfig {
             ))
     );
 
-    private final Map<UUID, PlayerInfo> playerCache = Collections.synchronizedMap(new HashMap<>());
+    private final Map<UUID, PlayerInfo> playerCache = new HashMap<>();
 
     @Override
     public String getIdentifier() {
@@ -102,11 +102,15 @@ public class PlayersHandler implements IConfig {
      * @return The info about the player.
      */
     public PlayerInfo getInfo(UUID uuid, String username, String skinURL, int ping, PlayerInfo.GameMode gameMode) {
+        if (uuid == null) return null; // :( slowy
+
         PlayerInfo info = playerCache.get(uuid);
         boolean newCache = info == null;
         if (newCache) {
             info = new PlayerInfo(playerCache.size(), uuid, System.currentTimeMillis());
-            playerCache.put(uuid, info);
+            synchronized (playerCache) {
+                playerCache.put(uuid, info);
+            }
         }
 
         // Apply the information we have to the player
@@ -135,8 +139,10 @@ public class PlayersHandler implements IConfig {
     }
 
     public PlayerInfo getInfo(String username) {
-        for (PlayerInfo info : playerCache.values()) {
-            if (info.username.equalsIgnoreCase(username)) return info;
+        synchronized (playerCache) {
+            for (PlayerInfo info : playerCache.values()) {
+                if (info.username.equalsIgnoreCase(username)) return info;
+            }
         }
         return null;
     }

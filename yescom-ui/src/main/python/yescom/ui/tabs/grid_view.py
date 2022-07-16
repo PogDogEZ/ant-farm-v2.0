@@ -5,7 +5,8 @@ from PyQt6.QtGui import *
 from PyQt6.QtWidgets import *
 
 from ..renderer.grid import GridRenderer
-from ..resources import Resources
+from ..renderer.grid.selection import Selection
+from ..widgets.dimension import DimensionComboBox
 
 from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
@@ -45,17 +46,11 @@ class GridViewTab(QWidget):
         dimension_label.setText("Dimension:")
         controls_layout.addWidget(dimension_label, 0, 0, 1, 1)
 
-        self.dimension_combo_box = QComboBox(self)
-        self.dimension_combo_box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContentsOnFirstShow)
-        self.dimension_combo_box.currentIndexChanged.connect(self._on_dimension_changed)
-
-        self.dimension_combo_box.addItem("Overworld  ", Dimension.OVERWORLD)
-        self.dimension_combo_box.setItemIcon(0, QIcon(Resources.INSTANCE.pixmap("icons/Grass_Block_JE7_BE6.png")))
-        self.dimension_combo_box.addItem("Nether  ", Dimension.NETHER)
-        self.dimension_combo_box.setItemIcon(1, QIcon(Resources.INSTANCE.pixmap("icons/Netherrack_JE2_BE1.png")))
-        self.dimension_combo_box.addItem("End  ", Dimension.END)
-        self.dimension_combo_box.setItemIcon(2, QIcon(Resources.INSTANCE.pixmap("icons/End_Stone_JE3_BE2.png")))
+        self.dimension_combo_box = DimensionComboBox(self)
+        self.dimension_combo_box.dimension_changed.connect(self._on_dimension_changed)
         controls_layout.addWidget(self.dimension_combo_box, 0, 1, 1, 1)
+
+        self.renderer.dimension_changed.connect(self.dimension_combo_box.set_dimension)
 
         selection_label = QLabel(self)
         selection_label.setText("Selection mode:")
@@ -65,10 +60,14 @@ class GridViewTab(QWidget):
         self.selection_combo_box.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContentsOnFirstShow)
         self.selection_combo_box.currentIndexChanged.connect(self._on_selection_changed)
 
-        self.selection_combo_box.addItem("None  ", GridRenderer.Selection.Mode.NONE)
-        self.selection_combo_box.addItem("Line  ", GridRenderer.Selection.Mode.LINE)
-        self.selection_combo_box.addItem("Box  ", GridRenderer.Selection.Mode.BOX)
+        self.selection_combo_box.addItem("None  ", Selection.Mode.NONE)
+        self.selection_combo_box.addItem("Line  ", Selection.Mode.LINE)
+        self.selection_combo_box.addItem("Box  ", Selection.Mode.BOX)
         controls_layout.addWidget(self.selection_combo_box, 0, 3, 1, 1)
+
+        self.renderer.selection_changed.connect(
+            lambda selection: self.selection_combo_box.setCurrentIndex(self.selection_combo_box.findData(selection)),
+        )
 
         controls_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum), 0, 4, 1, 1)
         # controls_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum), 1, 2, 1, 1)
@@ -82,8 +81,8 @@ class GridViewTab(QWidget):
 
         # main_layout.addWidget(main_splitter)
 
-    def _on_dimension_changed(self, index: int) -> None:
-        self.renderer.dimension = self.dimension_combo_box.currentData()
+    def _on_dimension_changed(self, dimension: Dimension) -> None:
+        self.renderer.dimension = dimension
 
     def _on_selection_changed(self, index: int) -> None:
         self.renderer.selection_mode = self.selection_combo_box.currentData()

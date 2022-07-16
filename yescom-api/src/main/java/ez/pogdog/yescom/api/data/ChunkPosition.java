@@ -2,7 +2,7 @@ package ez.pogdog.yescom.api.data;
 
 import java.util.Objects;
 
-public final class ChunkPosition {
+public class ChunkPosition {
 
     private final int x;
     private final int z;

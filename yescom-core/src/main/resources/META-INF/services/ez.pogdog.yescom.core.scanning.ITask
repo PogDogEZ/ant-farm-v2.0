@@ -1,0 +1,4 @@
+ez.pogdog.yescom.core.scanning.tasks.BasicScanTask
+ez.pogdog.yescom.core.scanning.tasks.BasicHighwayScanTask
+ez.pogdog.yescom.core.scanning.tasks.SpiralScanTask
+ez.pogdog.yescom.core.scanning.tasks.StaticScanTask

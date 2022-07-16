@@ -51,9 +51,9 @@ class BaseConsole(QFrame):
         self._more = False
         self._current_line = 0
 
-        self._ps1 = 'IN [%s]: '
+        self._ps1 = 'In [%s]: '
         self._ps2 = '...: '
-        self._ps_out = 'OUT[%s]: '
+        self._ps_out = 'Out[%s]: '
         self._ps = self._ps1 % self._current_line
 
         self.stdin = Stream()

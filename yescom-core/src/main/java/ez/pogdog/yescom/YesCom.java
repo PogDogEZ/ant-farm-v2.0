@@ -9,8 +9,8 @@ import ez.pogdog.yescom.core.config.IConfig;
 import ez.pogdog.yescom.core.data.PlayersHandler;
 import ez.pogdog.yescom.core.connection.Server;
 import ez.pogdog.yescom.core.data.DataHandler;
-import ez.pogdog.yescom.core.query.ChunkHandler;
-import ez.pogdog.yescom.core.scanning.ScanningHandler;
+import ez.pogdog.yescom.core.query.loaded.ChunkHandler;
+import ez.pogdog.yescom.core.scanning.TaskHandler;
 import ez.pogdog.yescom.core.threads.FastAsyncUpdater;
 import ez.pogdog.yescom.core.threads.SlowAsyncUpdater;
 import ez.pogdog.yescom.core.util.Bootstrap;
@@ -121,6 +121,8 @@ public class YesCom extends Thread implements IConfig {
         } catch (IllegalArgumentException | NullPointerException ignored) {
         }
 
+        // Logger.getLogger("yescom.core.query.invalidmove").setLevel(Level.FINER);
+
         try {
             new YesCom(
                     accountsFile == null ? "accounts.txt" : accountsFile,
@@ -176,7 +178,7 @@ public class YesCom extends Thread implements IConfig {
     public final ConfigHandler configHandler;
     public final DataHandler dataHandler;
     public final PlayersHandler playersHandler;
-    public final ScanningHandler scanningHandler;
+    public final TaskHandler taskHandler;
 
     public /* final */ Interpreter python;
 
@@ -206,7 +208,7 @@ public class YesCom extends Thread implements IConfig {
         accountHandler = new AccountHandler(accountsFile);
         playersHandler = new PlayersHandler();
         chunkHandler = new ChunkHandler();
-        scanningHandler = new ScanningHandler();
+        taskHandler = new TaskHandler();
 
         configHandler.addConfiguration(this);
         configHandler.addConfiguration(playersHandler);

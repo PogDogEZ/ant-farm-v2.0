@@ -115,10 +115,12 @@ public class PlayerSerialiser implements ISerialiser, ITickable {
         long start = System.currentTimeMillis();
 
         Map<UUID, PlayerInfo> playerCache = yesCom.playersHandler.getPlayerCache();
-        int count = Serial.Read.readInteger(inputStream);
-        for (int index = 0; index < count; ++index) {
-            PlayerInfo info = Serial.Read.readPlayerInfo(inputStream);
-            playerCache.put(info.uuid, info);
+        synchronized (playerCache) {
+            int count = Serial.Read.readInteger(inputStream);
+            for (int index = 0; index < count; ++index) {
+                PlayerInfo info = Serial.Read.readPlayerInfo(inputStream);
+                playerCache.put(info.uuid, info);
+            }
         }
 
         inputStream.close();
@@ -173,9 +175,21 @@ public class PlayerSerialiser implements ISerialiser, ITickable {
 
         OutputStream outputStream = new FileOutputStream(playersFile);
         outputStream.write(PLAYER_CACHE_HEADER);
-        Serial.Write.writeInteger(playerCache.size(), outputStream);
 
-        for (PlayerInfo info : playerCache.values()) Serial.Write.writePlayerInfo(info, outputStream);
+        /*
+        Exception in thread "yescom-slow-async-updater" java.util.ConcurrentModificationException
+            at java.base/java.util.HashMap$HashIterator.nextNode(HashMap.java:1511)
+            at java.base/java.util.HashMap$ValueIterator.next(HashMap.java:1539)
+            at ez.pogdog.yescom.core.data.serialisers.PlayerSerialiser.savePlayerCache(PlayerSerialiser.java:191)
+            at ez.pogdog.yescom.core.data.serialisers.PlayerSerialiser.save(PlayerSerialiser.java:87)
+            at ez.pogdog.yescom.core.data.DataHandler.saveDatabase(DataHandler.java:109)
+            at ez.pogdog.yescom.core.data.DataHandler.tick(DataHandler.java:67)
+            at ez.pogdog.yescom.core.threads.SlowAsyncUpdater.run(SlowAsyncUpdater.java:31)
+         */
+        synchronized (playerCache) {
+            Serial.Write.writeInteger(playerCache.size(), outputStream);
+            for (PlayerInfo info : playerCache.values()) Serial.Write.writePlayerInfo(info, outputStream);
+        }
 
         outputStream.close();
 
@@ -197,18 +211,21 @@ public class PlayerSerialiser implements ISerialiser, ITickable {
         Set<PlayerInfo> newDirty = new HashSet<>();
         Map<PlayerInfo, AbstractFile<T>> oldDirty = new HashMap<>();
 
-        for (PlayerInfo info : yesCom.playersHandler.getPlayerCache().values()) {
-            if (!getter.apply(info).isEmpty()) {
-                newDirty.add(info);
-                for (AbstractFile<T> file : files) { // Find out if we are already storing this info in a file
-                    if (file.offsets.containsKey(info.lookupID)) {
-                        newDirty.remove(info);
-                        oldDirty.put(info, file);
-                        break;
+        Map<UUID, PlayerInfo> playerCache = yesCom.playersHandler.getPlayerCache();
+        synchronized (playerCache) {
+            for (PlayerInfo info : playerCache.values()) {
+                if (!getter.apply(info).isEmpty()) {
+                    newDirty.add(info);
+                    for (AbstractFile<T> file : files) { // Find out if we are already storing this info in a file
+                        if (file.offsets.containsKey(info.lookupID)) {
+                            newDirty.remove(info);
+                            oldDirty.put(info, file);
+                            break;
+                        }
                     }
+                    // FIXME: Caching
+                    // sessionsCache.remove(info.uuid); // If we've cached the old version, we need to invalidate it
                 }
-                // FIXME: Caching
-                // sessionsCache.remove(info.uuid); // If we've cached the old version, we need to invalidate it
             }
         }
 

@@ -85,8 +85,8 @@ class OverviewTab(QWidget):
         info_layout.addWidget(self.queryrate_label)
 
         self.queries_label = QLabel(self)
-        self.queries_label.setText("Queries(W/T): 0 / 0")
-        self.queries_label.setToolTip("The number of queries waiting to be processed and the number of queries being processed.")
+        self.queries_label.setText("Queries(T/W): 0 / 0")
+        self.queries_label.setToolTip("The number of queries being processed and the number of queries waiting to be processed.")
         info_layout.addWidget(self.queries_label)
 
         info_layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
@@ -173,7 +173,7 @@ class OverviewTab(QWidget):
             max(0, (render_distance - 1) // 2), render_distance,  #, render_distance ** 2,
         ))
         self.queryrate_label.setText("Queryrate(E/A): %.1fqps / %.1fqps" % (queryrate_e, queryrate_a))
-        self.queries_label.setText("Queries(W/T): %i / %i" % (waiting, ticking))
+        self.queries_label.setText("Queries(T/W): %i / %i" % (ticking, waiting))
 
         self.disconnect_all_button.setEnabled(current is not None and current.isConnected())
 

@@ -28,6 +28,8 @@ import ez.pogdog.yescom.core.query.IQuery;
 import ez.pogdog.yescom.core.query.IQueryHandle;
 import ez.pogdog.yescom.core.query.invalidmove.InvalidMoveHandle;
 import ez.pogdog.yescom.core.report.connection.HighTSLPReport;
+import ez.pogdog.yescom.core.scanning.IScanner;
+import ez.pogdog.yescom.core.scanning.ITask;
 import ez.pogdog.yescom.core.servers.IServerBehaviour;
 
 import java.nio.charset.StandardCharsets;
@@ -64,6 +66,12 @@ public class Server implements IConfig, ITickable {
             "Invalid move enabled",
             "Enables invalid move packet queries to be made when querying for loaded chunks.",
             true
+    );
+
+    public final Option<Integer> AUTOSAVE_TICKS = new Option<>(
+            "Autosave ticks",
+            "The number of ticks the autosave takes.",
+            300 // 300 ticks for constantiam.net, 900 for most servers
     );
 
     public final Option<Integer> GLOBAL_LOGIN_TIME = new Option<>(
@@ -118,6 +126,9 @@ public class Server implements IConfig, ITickable {
     public final InvalidMoveHandle netherInvalidMoveHandle;
     public final InvalidMoveHandle endInvalidMoveHandle;
 
+    private final List<IScanner> scanners = new ArrayList<>();
+    private final List<ITask> tasks = new ArrayList<>();
+
     private final Map<UUID, Long> onlinePlayers = new HashMap<>();
     private final List<Player> players = new CopyOnWriteArrayList<>();
     // private final Queue<ChatMessage> chatMessages = new ArrayDeque<>();
@@ -161,6 +172,9 @@ public class Server implements IConfig, ITickable {
 
         logger.fine(String.format("%d handle(s) for server %s:%d.", handles.size(), hostname, port));
 
+        for (IScanner scanner : ServiceLoader.load(IScanner.class)) addScanner(scanner);
+        logger.fine(String.format("%d scanners for server %s:%d.", scanners.size(), hostname, port));
+
         Set<IServerBehaviour> behaviours = new HashSet<>();
         for (IServerBehaviour behaviour : ServiceLoader.load(IServerBehaviour.class)) {
             if (behaviour.isValid(this)) behaviours.add(behaviour);
@@ -172,6 +186,8 @@ public class Server implements IConfig, ITickable {
         logger.fine(String.format("Registered valid behaviour %s for %s:%d.", behaviour, hostname, port));
         behaviour.apply(this);
 
+        if (behaviour.getHighways().isEmpty()) logger.warning(String.format("Server %s:%d has no highway data.", hostname, port));
+
         // logger.fine(String.format("%d behaviour(s) for server %s:%d.", behaviours.size(), hostname, port));
 
         connectionTime = System.currentTimeMillis();
@@ -180,13 +196,15 @@ public class Server implements IConfig, ITickable {
         lastStatsTime = System.currentTimeMillis();
         lastHighTslp = 0;
 
+        Emitters.ON_SERVER_ADDED.emit(this); // FIXME: Maybe encapsulate servers properly, and fire when added?
+
         // Emitters.ON_ACCOUNT_ADDED.connect(this::onAccountAdded);
     }
 
     @Override
     public String toString() {
         return String.format("Server(host=%s, port=%d, players=%d, tps=%.1f, ping=%.1f, qps=%.1f)", hostname, port,
-                players.size(), tickrate, ping, queriesPerSecond);
+                players.size(), tickrate, ping, effectiveQPS);
     }
 
     @Override
@@ -208,7 +226,7 @@ public class Server implements IConfig, ITickable {
     public synchronized void tick() {
         Set<IAccount> accounts = yesCom.accountHandler.getAvailableAccounts();
         if (!accounts.isEmpty()) {
-            int loggedIn = 0;
+            boolean loggedIn = false;
             // logger.finer(String.format("Adding %d account(s) to %s:%d...", accounts.size(), hostname, port));
             outer: for (IAccount account : accounts) { // FIXME: Way too slow, some sort of emitter?
                 for (Player player : players) {
@@ -217,13 +235,13 @@ public class Server implements IConfig, ITickable {
 
                 try {
                     addPlayer(new Player(this, account));
-                    ++loggedIn;
+                    loggedIn = true;
                 } catch (RequestException error) {
                     logger.warning(String.format("Failed to add account %s to %s:%d: %s.", account, hostname, port, error.getMessage()));
                     logger.throwing(getClass().getSimpleName(), "onAccountAdded", error);
                 }
 
-                if (loggedIn > 2) break; // Login max 2 accounts per tick
+                if (loggedIn) break; // Login max 1 account per tick
             }
         }
         // logger.finer(String.format("Server %s:%d has %d usable player(s).", hostname, port, players.size()));
@@ -310,7 +328,7 @@ public class Server implements IConfig, ITickable {
             synchronized (onlinePlayers) { // If we aren't connected then we don't know anything about the online players
                 if (!onlinePlayers.isEmpty()) {
                     for (UUID uuid : new ArrayList<>(onlinePlayers.keySet())) handleDisconnect(yesCom.playersHandler.getInfo(uuid));
-                    onlinePlayers.clear();
+                    // onlinePlayers.clear();
                 }
             }
             recentDeaths.clear();
@@ -318,6 +336,13 @@ public class Server implements IConfig, ITickable {
             tslp = 0;
             connectionTime = System.currentTimeMillis();
         }
+
+        // Tick tasks before scanners as they have a higher priority
+        for (ITask task : new ArrayList<>(tasks)) {
+            task.tick();
+            if (task.isFinished()) removeTask(task);
+        }
+        for (IScanner scanner : scanners) scanner.tick();
 
         effectiveQPS = 0.0f;
         actualQPS = 0.0f;
@@ -581,6 +606,73 @@ public class Server implements IConfig, ITickable {
                 onlinePlayers.remove(player.uuid);
                 Emitters.ON_ANY_PLAYER_LEAVE.emit(new Emitters.OnlinePlayerInfo(player, this));
             }
+        }
+    }
+
+    /**
+     * @return A reference to the list of all {@link IScanner}s running on this server, for performance.
+     */
+    public List<IScanner> getScanners() {
+        return scanners;
+    }
+
+    /**
+     * Attempts to add an {@link IScanner} to this server.
+     * @param scanner The scanner to add.
+     */
+    public synchronized void addScanner(IScanner scanner) {
+        for (IScanner scanner1 : scanners) {
+            if (scanner1.getClass().equals(scanner.getClass())) return; // Don't add duplicate scanners
+        }
+        if (scanner.apply(this)) {
+            logger.finer(String.format("Applied scanner %s to server %s:%d.", scanner, hostname, port));
+            scanners.add(scanner);
+            Emitters.ON_SCANNER_ADDED.emit(scanner);
+        }
+    }
+
+    /**
+     * @return A reference to the list of all {@link ITask}s running on this server.
+     */
+    public List<ITask> getTasks() {
+        return tasks;
+    }
+
+    /**
+     * Adds a {@link ITask} to this server.
+     * @param task The task to add.
+     * @param dimension The dimension to start the task in.
+     * @param parameters The parameters to start the task with.
+     * @return Was the task applied successfully?
+     */
+    public synchronized boolean addTask(ITask task, Dimension dimension, Map<String, Object> parameters) {
+        if (!tasks.contains(task)) {
+            if (task.apply(this, dimension, parameters)) {
+                logger.finer(String.format(
+                        "Applied task %s to server %s:%d (dimension %s) with %d parameters.",
+                        task, hostname, port, dimension, parameters.size()
+                ));
+                tasks.add(task);
+                Emitters.ON_TASK_ADDED.emit(task);
+                return true;
+
+            } else {
+                return false;
+            }
+        }
+        return true; // Task already applied to this server, so true in some sense
+    }
+
+    /**
+     * Removes a {@link ITask} from this server, and cancels it if it is not finished.
+     * @param task The task to remove.
+     */
+    public synchronized void removeTask(ITask task) {
+        if (tasks.contains(task)) {
+            logger.finer(String.format("Stopping task %s on server %s:%d.", task, hostname, port));
+            if (!task.isFinished()) task.cancel();
+            tasks.remove(task);
+            Emitters.ON_TASK_REMOVED.emit(task);
         }
     }
 

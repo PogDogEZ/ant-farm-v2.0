@@ -61,12 +61,17 @@ public abstract class IsLoadedQuery<T extends IQueryHandle<? extends IsLoadedQue
 
 	@Override
 	public int compareTo(IsLoadedQuery<?> other) {
-		return priority.compareTo(other.priority);
+		return -priority.compareTo(other.priority);
 	}
 
 	@Override
 	public boolean isExpired() {
 		return expiry > 0 && System.currentTimeMillis() <= expiry;
+	}
+
+	@Override
+	public Dimension getDimension(IQueryHandle<? extends IQuery> handle) {
+		return dimension;
 	}
 
 	/**

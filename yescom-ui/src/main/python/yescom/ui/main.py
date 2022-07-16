@@ -31,8 +31,11 @@ class MainWindow(QMainWindow):
 
     server_changed = pyqtSignal()
     connection_established = pyqtSignal(object)
-    connection_lost = pyqtSignal(object)
+    scanner_added = pyqtSignal(object)
+    task_added = pyqtSignal(object)
+    task_removed = pyqtSignal(object)
     chunk_state = pyqtSignal(object)
+    connection_lost = pyqtSignal(object)
 
     account_added = pyqtSignal(object)
     account_error = pyqtSignal(object)
@@ -113,6 +116,13 @@ class MainWindow(QMainWindow):
         logger.fine("Setting up signals...")
         # Need to do this cos we want the certain processes to be carried out in the right thread
 
+        emitters.ON_CONNECTION_ESTABLISHED.connect(self.connection_established.emit)
+        emitters.ON_SCANNER_ADDED.connect(self.scanner_added.emit)
+        emitters.ON_TASK_ADDED.connect(self.task_added.emit)
+        emitters.ON_TASK_REMOVED.connect(self.task_removed.emit)
+        emitters.ON_CHUNK_STATE.connect(self.chunk_state.emit)
+        emitters.ON_CONNECTION_LOST.connect(self.connection_lost.emit)
+
         # FIXME: If we're just gonna do this, there's really no point in having some fancy PyEmitter system, at least in the UI part
         emitters.ON_ACCOUNT_ADDED.connect(self.account_added.emit)
         emitters.ON_ACCOUNT_ERROR.connect(self.account_error.emit)
@@ -129,10 +139,6 @@ class MainWindow(QMainWindow):
         emitters.ON_PLAYER_HEALTH_UPDATE.connect(self.player_health_update.emit)
         emitters.ON_PLAYER_SERVER_STATS_UPDATE.connect(self.player_server_stats_update.emit)
 
-        emitters.ON_CONNECTION_ESTABLISHED.connect(self.connection_established.emit)
-        emitters.ON_CONNECTION_LOST.connect(self.connection_lost.emit)
-        emitters.ON_CHUNK_STATE.connect(self.chunk_state.emit)
-
         emitters.ON_NEW_PLAYER_CACHED.connect(self.new_player_cached.emit)
         emitters.ON_TRUST_STATE_CHANGED.connect(self.trust_state_changed.emit)
         emitters.ON_ANY_PLAYER_JOIN.connect(self.any_player_joined.emit)
@@ -147,7 +153,7 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout()
 
         self.smiling_imp_label = QLabel(self.central_widget)
-        self.smiling_imp_label.setText("\ud83d\ude08")
+        self.smiling_imp_label.setText("\ud83d\ude08")  # TODO: Useful information about TPS, QPS, ping, etc...
         layout.addWidget(self.smiling_imp_label)
 
         layout.addItem(QSpacerItem(40, 20, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
@@ -292,6 +298,5 @@ from .tabs.graphs import GraphsTab
 from .tabs.grid_view import GridViewTab
 from .tabs.options import OptionsTab
 from .tabs.overview import OverviewTab
-from .tabs.secret import DebugTab
 from .tabs.tasks import TasksTab
 from .threads import EventQueueThread, SkinDownloaderThread

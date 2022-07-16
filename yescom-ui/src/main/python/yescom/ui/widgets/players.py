@@ -2,7 +2,6 @@
 
 import datetime
 import re
-import time
 import webbrowser
 from typing import Any, Tuple, Union
 
@@ -10,7 +9,8 @@ from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import *
 
-from ..dialogs.player_info import PlayerInfoDialog
+from .shared import ContextMenuTree
+from ..dialogs.players import PlayerInfoDialog
 
 from java.util import UUID
 
@@ -349,7 +349,161 @@ logger = Logging.getLogger("yescom.ui.widgets.players")
 #             player_info_dialog.show()
 
 
-class AbstractPlayersTree(QTreeWidget):
+class PlayerSelectionButton(QPushButton):
+    """
+    Allows the user to select a player.
+    """
+
+    @property
+    def info(self) -> Union[PlayerInfo, None]:
+        """
+        :return: The currently selected player.
+        """
+
+        return self._info
+
+    @info.setter
+    def info(self, value: Union[PlayerInfo, None]) -> None:
+        if value != self._info:
+            self._info = value
+            self._update()
+
+    def __init__(self, parent: QWidget, info: Union[PlayerInfo, None] = None) -> None:
+        super().__init__(parent)
+
+        self.main_window = MainWindow.INSTANCE
+
+        self._info: Union[PlayerInfo, None] = info
+        self._selection_popup: Union[PlayerSelectionButton.SelectionPopup, None] = None
+
+        self.clicked.connect(self._on_clicked)
+
+        self.main_window.skin_downloader_thread.skin_resolved.connect(self._on_skin_resolved)
+
+        self._update()
+
+    def _update(self) -> None:
+        if self._info is None:
+            self.setText("Select a player...")
+            self.setIcon(QIcon())
+        else:
+            self.setText(self._info.username)
+            self.setIcon(QIcon())  # Reset icon and resolve the skin
+            self.main_window.skin_downloader_thread.request_skin(self._info.uuid)
+
+    # ------------------------------ Events ------------------------------ #
+
+    def _on_clicked(self, checked: bool) -> None:
+        if self._selection_popup is not None:
+            self._selection_popup.close()
+        self._selection_popup = PlayerSelectionButton.SelectionPopup(self, self.mapToGlobal(QPoint(0, 0)))
+        self._selection_popup.show()
+
+    def _on_skin_resolved(self, resolved: Tuple[UUID, QPixmap]) -> None:
+        if self._info is not None and resolved[0] == self._info.uuid:
+            self.setIcon(QIcon(resolved[1]))
+
+    # ------------------------------ Classes ------------------------------ #
+
+    class SelectionPopup(QWidget):
+        """
+        The actual selection popup. Allows the user to search for the player.
+        """
+
+        def __init__(self, parent: "PlayerSelectionButton", origin: QPoint) -> None:
+            super().__init__(parent)
+
+            self.yescom = YesCom.getInstance()
+
+            geometry = self.geometry()
+            geometry.setTopLeft(origin)
+            self.setGeometry(geometry)
+            self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+
+            self._setup()
+
+            player_cache = self.yescom.playersHandler.getPlayerCache()
+            with player_cache.synchronized():
+                for info in player_cache.values():
+                    self.players_list.addItem(info.username)
+
+            # self.main_window.new_player_cached.connect(self._on_new_player_cached)
+
+        def _setup(self) -> None:
+            main_layout = QVBoxLayout(self)
+
+            self.search_edit = QLineEdit(self)
+            self.search_edit.setValidator(QRegularExpressionValidator(QRegularExpression("[A-Za-z0-9_]{1,18}"), self))
+            self.search_edit.setFixedWidth(self.search_edit.fontMetrics().boundingRect("M" * 16).width())
+            self.search_edit.setPlaceholderText("Search by username...")
+            self.search_edit.setFocus()
+            self.search_edit.textChanged.connect(self._on_search_text_changed)
+            self.search_edit.returnPressed.connect(self._on_search_return_pressed)
+            main_layout.addWidget(self.search_edit)
+
+            self.players_list = QListWidget(self)
+            self.players_list.setFixedHeight(self.fontMetrics().height() * 10)
+            self.players_list.itemSelectionChanged.connect(self._on_player_selection_changed)
+            self.players_list.itemDoubleClicked.connect(lambda item: self._select())
+            main_layout.addWidget(self.players_list)
+
+            buttons_layout = QHBoxLayout()
+
+            self.deselect_button = QPushButton(self)
+            self.deselect_button.setText("Deselect")
+            self.deselect_button.clicked.connect(lambda checked: self._deselect())
+            buttons_layout.addWidget(self.deselect_button)
+
+            self.select_button = QPushButton(self)
+            self.select_button.setText("Select")
+            self.select_button.setEnabled(False)  # Won't have a selected player when it's first created
+            self.select_button.clicked.connect(lambda checked: self._select())
+            buttons_layout.addWidget(self.select_button)
+
+            main_layout.addLayout(buttons_layout)
+            main_layout.setContentsMargins(4, 4, 4, 4)
+
+        # ------------------------------ Events ------------------------------ #
+
+        def closeEvent(self, event: QCloseEvent) -> None:
+            self.parent()._selection_dialog = None
+            super().closeEvent(event)
+
+        def _on_search_text_changed(self, text: str) -> None:
+            text = text.lower()
+            for index in range(self.players_list.count()):
+                item = self.players_list.item(index)
+                item.setHidden(not item.text().lower().startswith(text))
+
+        def _on_search_return_pressed(self) -> None:
+            current = self.players_list.currentItem()
+            if current is None or current.isHidden():
+                for index in range(self.players_list.count()):
+                    item = self.players_list.item(index)
+                    if not item.isHidden():
+                        self.players_list.setCurrentItem(item)
+                        break
+                else:
+                    ...  # TODO: Lookup name through Mojang API
+            self._select()
+
+        def _on_player_selection_changed(self) -> None:
+            self.select_button.setEnabled(self.players_list.currentItem() is not None)
+
+        # ------------------------------ Utility methods ------------------------------ #
+
+        def _select(self) -> None:
+            current = self.players_list.currentItem()
+            if current is not None and not current.isHidden():
+                self.parent().info = self.yescom.playersHandler.getInfo(current.text())
+            self.close()
+
+        def _deselect(self) -> None:
+            self.parent().info = None
+            self.close()
+
+
+class AbstractPlayersTree(ContextMenuTree):
     """
     A tree widget containing information about players.
     """
@@ -362,7 +516,7 @@ class AbstractPlayersTree(QTreeWidget):
 
         self._label = label
         self._show_skin = show_skin
-        self._filter_dialog: Union[AbstractPlayersTree.FilterDialog, None] = None
+        self._filter_popup: Union[AbstractPlayersTree.FilterPopup, None] = None
 
         self._setup()
 
@@ -379,27 +533,18 @@ class AbstractPlayersTree(QTreeWidget):
 
     # ------------------------------ Events ------------------------------ #
 
-    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
-        current = self.currentItem()
-        if current is None:
-            return
-
-        menu = QMenu()
-
-        if isinstance(current, AbstractPlayersTree.AbstractPlayerItem):
-            current.apply_to_context_menu(menu)
-        elif isinstance(current.parent(), AbstractPlayersTree.AbstractPlayerItem):
-            current.parent().apply_to_context_menu(menu)
-        else:
-            logger.warning("Don't know how to handle item %s." % current)
-            return
-
-        menu.exec(event.globalPos())
-
     def keyPressEvent(self, event: QKeyEvent) -> None:
-        if self._filter_dialog is None and re.fullmatch("[A-Za-z0-9_]{1,18}", event.text()):
-            self._filter_dialog = AbstractPlayersTree.FilterDialog(self, self.mapToGlobal(QPoint(0, 0)), event.text())
-            self._filter_dialog.show()
+        if self._filter_popup is None and re.fullmatch("[A-Za-z0-9_]{1,18}", event.text()):
+            self._filter_popup = AbstractPlayersTree.FilterPopup(self, self.mapToGlobal(QPoint(0, 0)), event.text())
+            self._filter_popup.show()
+
+        elif event.key() == Qt.Key.Key_Return:
+            if isinstance(self.currentItem(), AbstractPlayersTree.AbstractPlayerItem):
+                self.currentItem().on_user_selected()
+
+    # def _on_item_double_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+    #     if isinstance(item, AbstractPlayersTree.AbstractPlayerItem):
+    #         item.on_user_selected()
 
     # ------------------------------ Other methods ------------------------------ #
 
@@ -415,12 +560,12 @@ class AbstractPlayersTree(QTreeWidget):
                 count += 1
 
         self.setHeaderLabels(["%s (%i):" % (self._label, count), ""])
-        if self._filter_dialog is not None:
-            self._filter_dialog.force_update()
+        if self._filter_popup is not None:
+            self._filter_popup.force_update()
 
     # ------------------------------ Classes ------------------------------ #
 
-    class FilterDialog(QWidget):
+    class FilterPopup(QWidget):
         """
         Allows you to filter the players by certain things.
         """
@@ -436,7 +581,6 @@ class AbstractPlayersTree(QTreeWidget):
             self._setup()
 
             self.search_edit.setText(initial)
-            self.search_edit.setFocus()
 
         def _setup(self) -> None:
             main_layout = QVBoxLayout(self)
@@ -445,6 +589,7 @@ class AbstractPlayersTree(QTreeWidget):
             self.search_edit.setValidator(QRegularExpressionValidator(QRegularExpression("[A-Za-z0-9_]{1,18}"), self))
             self.search_edit.setFixedWidth(self.search_edit.fontMetrics().boundingRect("M" * 16).width())
             self.search_edit.setPlaceholderText("Search by username...")
+            self.search_edit.setFocus()
             self.search_edit.textChanged.connect(self._on_search_text_changed)
             self.search_edit.returnPressed.connect(self.close)
             main_layout.addWidget(self.search_edit)
@@ -456,7 +601,7 @@ class AbstractPlayersTree(QTreeWidget):
         # ------------------------------ Events ------------------------------ #
 
         def closeEvent(self, event: QCloseEvent) -> None:
-            self.parent()._filter_dialog = None
+            self.parent()._filter_popup = None
             for index in range(self.parent().topLevelItemCount()):
                 top_level_item = self.parent().topLevelItem(index)
                 if isinstance(top_level_item, AbstractPlayersTree.AbstractPlayerItem):
@@ -464,6 +609,8 @@ class AbstractPlayersTree(QTreeWidget):
 
             if self.parent().currentItem() is not None:  # Scroll to the current item when we unhide everything
                 self.parent().scrollToItem(self.parent().currentItem())
+
+            self.parent()._update_count()
 
             super().closeEvent(event)
 
@@ -488,7 +635,7 @@ class AbstractPlayersTree(QTreeWidget):
 
             self._on_search_text_changed(self.search_edit.text())
 
-    class AbstractPlayerItem(QTreeWidgetItem):
+    class AbstractPlayerItem(ContextMenuTree.ContextMenuTreeItem):
         """
         The actual item that displays the information about the player.
         """
@@ -531,11 +678,12 @@ class AbstractPlayersTree(QTreeWidget):
         def _setup(self) -> None:
             ...
 
-        def apply_to_context_menu(self, context_menu: QMenu) -> None:
+        def apply_to_context_menu(self, context_menu: QMenu, clicked_child: QTreeWidgetItem) -> None:
             """
             Applies this player to the context menu.
 
             :param context_menu: The context menu.
+            :param clicked_child: The child item that the user right-clicked on.
             """
 
             player = None
@@ -562,6 +710,14 @@ class AbstractPlayersTree(QTreeWidget):
                 "Copy username", lambda: QApplication.clipboard().setText(self.info.username),
             )
             context_menu.addAction("Copy UUID", lambda: QApplication.clipboard().setText(str(self.info.uuid)))
+
+        def on_user_selected(self) -> None:
+            """
+            Called when the user presses return while this player is selected. By default it opens the info dialog 
+            for the player.
+            """
+
+            self._view_info()
 
         def try_hide(self, hidden: bool) -> None:
             """
@@ -615,7 +771,7 @@ class OnlinePlayersTree(AbstractPlayersTree):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent, label="Online players")
 
-        self.main_window.server_changed.connect(self._update_count)
+        self.main_window.server_changed.connect(lambda: QTimer.singleShot(50, self._update_count))
         self.main_window.any_player_joined.connect(
             lambda online_player_info: self._on_player_joined(online_player_info.info, online_player_info.server),
         )
@@ -678,7 +834,7 @@ class OnlinePlayersTree(AbstractPlayersTree):
 
         def _setup(self) -> None:
             self.online_for_child = QTreeWidgetItem(self, ["Online for:"])
-            self.online_for_child.setToolTip(0, "How long the player has been online for.")
+            # self.online_for_child.setToolTip(0, "How long the player has been online for.")
             self.addChild(self.online_for_child)
 
             self.ping_child = QTreeWidgetItem(self, ["Ping:"])
@@ -732,19 +888,29 @@ class OfflinePlayersTree(AbstractPlayersTree):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent, label="All players", show_skin=False)
 
-        self.main_window.new_player_cached.connect(self._on_new_player_cached)
+        header = self.header()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)  # Adding 900+ items really slows this down :(
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
 
         # Need to add the players that we've already cached
-        for info in self.yescom.playersHandler.getPlayerCache().values():
-            self._on_new_player_cached(info, skip_check=True)  # No need to check for duplicates here
+        player_cache = self.yescom.playersHandler.getPlayerCache()
+        with player_cache.synchronized():
+            for info in player_cache.values():
+                self._on_new_player_cached(info, skip_check=True)  # No need to check for duplicates here
+
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+
+        self.main_window.new_player_cached.connect(self._on_new_player_cached)
 
     # ------------------------------ Events ------------------------------ #
 
     def _on_new_player_cached(self, info: PlayerInfo, skip_check: bool = False) -> None:
         if not skip_check:
             # Should hopefully happen less often as the number of players increases
-            for top_level_index in range(self.topLevelItemCount()):
-                if info == self.topLevelItem(top_level_index).info:
+            for index in range(self.topLevelItemCount()):
+                top_level_item = self.topLevelItem(index)
+                if isinstance(top_level_item, OfflinePlayersTree.OfflinePlayerItem) and top_level_item.info == info:
                     return
         self.addTopLevelItem(OfflinePlayersTree.OfflinePlayerItem(self, info))
         self._update_count()
@@ -765,7 +931,7 @@ class OfflinePlayersTree(AbstractPlayersTree):
         # def _setup(self) -> None:
         #     super()._setup()  # TODO: Sessions, are we tracking them, etc...
 
-        def apply_to_context_menu(self, context_menu: QMenu) -> None:
+        def apply_to_context_menu(self, context_menu: QMenu, clicked_item: QTreeWidgetItem) -> None:
             trusted = context_menu.addAction("Trusted", self._toggle_trusted)
             trusted.setCheckable(True)
             trusted.setChecked(self.yescom.playersHandler.isTrusted(self.info.uuid))

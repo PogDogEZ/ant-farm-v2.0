@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 
 import math
-from enum import Enum
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple
 
-import bresenham
 from PyQt6.QtCore import *
 from PyQt6.QtGui import *
 from PyQt6.QtWidgets import *
 
-from ..tabs.secret import DebugTab
+from .selection import Selection
+from ...dialogs.tasks import NewTaskDialog
+from ...tabs.secret import DebugTab
 
 from ez.pogdog.yescom import YesCom
 from ez.pogdog.yescom.api import Logging
@@ -25,6 +25,9 @@ class GridRenderer(QGraphicsView):
     Responsible for rendering the grid in the grid view tab.
     """
 
+    dimension_changed = pyqtSignal(object)
+    selection_changed = pyqtSignal(object)
+
     _SECRET_KEY_SEQUENCE = (Qt.Key.Key_Up, Qt.Key.Key_A, Qt.Key.Key_N, Qt.Key.Key_T, Qt.Key.Key_Down)
 
     @property
@@ -34,6 +37,7 @@ class GridRenderer(QGraphicsView):
     @dimension.setter
     def dimension(self, value: Dimension) -> None:
         if value != self._dimension:
+            self.dimension_changed.emit(value)
             center = self.mapToScene(self.width() // 2, self.height() // 2)
 
             if value == Dimension.NETHER:
@@ -50,12 +54,14 @@ class GridRenderer(QGraphicsView):
             self._update()
 
     @property
-    def selection_mode(self) -> "GridRenderer.Selection.Mode":
+    def selection_mode(self) -> Selection.Mode:
         return self._selection.mode
 
     @selection_mode.setter
-    def selection_mode(self, value: "GridRenderer.Selection.Mode") -> None:
-        self._selection.mode = value
+    def selection_mode(self, value: Selection.Mode) -> None:
+        if value != self._selection._mode:
+            self.selection_changed.emit(value)
+            self._selection.mode = value
 
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
@@ -66,10 +72,8 @@ class GridRenderer(QGraphicsView):
 
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-
-        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
-        self.setResizeAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
-
+        # self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)  # FIXME: Doesn't work?
+        # self.setResizeAnchor(QGraphicsView.ViewportAnchor.NoAnchor)
         self.setBackgroundBrush(QBrush(QColor(255, 255, 255)))  # TODO: Set based on dimension
         self.setFrameShape(QFrame.Shape.NoFrame)
 
@@ -88,7 +92,7 @@ class GridRenderer(QGraphicsView):
         self._setup_position()
         self._setup_scale()
 
-        self._selection = GridRenderer.Selection(self, GridRenderer.Selection.Mode.NONE)
+        self._selection = Selection(self, Selection.Mode.NONE)
         self._regions: Dict[Tuple[int, int], QPixmap] = {}
 
         self._selecting = False
@@ -189,6 +193,55 @@ class GridRenderer(QGraphicsView):
 
     # ------------------------------ Events ------------------------------ #
 
+    def contextMenuEvent(self, event: QContextMenuEvent) -> None:
+        menu = QMenu(self)
+
+        query_selected = menu.addAction("Query selected", self._selection.query)
+        query_selected.setEnabled(not self._selection.empty)
+        clear_selected = menu.addAction("Clear selected", self._selection.clear)
+        clear_selected.setEnabled(not self._selection.empty)
+
+        menu.addSeparator()
+
+        menu.addAction("New task", self._new_task)  # TODO: Goto
+
+        menu.addSeparator()
+
+        dimension = menu.addMenu("Dimension")
+        for dimension_ in Dimension.values():
+            action = dimension.addAction(
+                str(dimension_).capitalize(), lambda dimension_=dimension_: self._set_dimension(dimension_),
+            )
+            action.setCheckable(True)
+            action.setChecked(self._dimension == dimension_)
+
+        selection = menu.addMenu("Selection")
+        for selection_ in Selection.Mode.__members__.values():
+            action = selection.addAction(
+                selection_.name.capitalize(), lambda selection_=selection_: self._set_selection(selection_),
+            )
+            action.setCheckable(True)
+            action.setChecked(self._selection.mode == selection_)
+
+        render = menu.addMenu("Render")
+        grid = render.addAction("Grid", lambda: self._toggle_render("_do_render_grid"))
+        grid.setCheckable(True)
+        grid.setChecked(self._do_render_grid)
+        position = render.addAction("Position", lambda: self._toggle_render("_do_render_position"))
+        position.setCheckable(True)
+        position.setChecked(self._do_render_position)
+        scale = render.addAction("Scale", lambda: self._toggle_render("_do_render_scale"))
+        scale.setCheckable(True)
+        scale.setChecked(self._do_render_scale)
+        distances = render.addAction("Distances", lambda: self._toggle_render("_do_render_distances"))
+        distances.setCheckable(True)
+        distances.setChecked(self._do_render_distances)
+        highways = render.addAction("Highways", lambda: self._toggle_render("_do_render_highways"))
+        highways.setCheckable(True)
+        highways.setChecked(self._do_render_highways)
+
+        menu.exec(event.globalPos())
+
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() in self._SECRET_KEY_SEQUENCE:
             if event.key() != self._SECRET_KEY_SEQUENCE[len(self._secret_sequence)]:
@@ -206,7 +259,7 @@ class GridRenderer(QGraphicsView):
         self._update()
 
     def mouseDoubleClickEvent(self, event: QMouseEvent) -> None:
-        if self._selection.mode != GridRenderer.Selection.Mode.NONE:
+        if self._selection.mode != Selection.Mode.NONE:
             self._selecting = True
             QApplication.setOverrideCursor(Qt.CursorShape.CrossCursor)
 
@@ -215,7 +268,7 @@ class GridRenderer(QGraphicsView):
             shift_pressed = QApplication.queryKeyboardModifiers() & Qt.KeyboardModifier.ShiftModifier
             control_pressed = QApplication.queryKeyboardModifiers() & Qt.KeyboardModifier.ControlModifier
             if shift_pressed or control_pressed:
-                if self._selection.mode != GridRenderer.Selection.Mode.NONE and not self._selecting:
+                if self._selection.mode != Selection.Mode.NONE and not self._selecting:
                     if self._last_mouse_pos is not None:  # Cursor will be set to grabbing
                         QApplication.restoreOverrideCursor()
                     self._selecting = True
@@ -223,7 +276,7 @@ class GridRenderer(QGraphicsView):
 
             position = QPoint(int(event.position().x()), int(event.position().y()))
 
-            if self._selection.mode != GridRenderer.Selection.Mode.NONE and self._selecting:
+            if self._selection.mode != Selection.Mode.NONE and self._selecting:
                 if self._last_mouse_pos is not None:
                     old_position = self.mapToScene(self._last_mouse_pos)
                     new_position = self.mapToScene(event.pos())
@@ -255,18 +308,18 @@ class GridRenderer(QGraphicsView):
             self._selection.release()
 
     def wheelEvent(self, event: QWheelEvent) -> None:
-        position = QPoint(int(event.position().x()), int(event.position().y()))
         # https://stackoverflow.com/questions/19113532/qgraphicsview-zooming-in-and-out-under-mouse-position-using-mouse-wheel
-        old_pos = self.mapToScene(position)
+        old_pos = self.mapToScene(event.position().toPoint())
+        scale = (
+            math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),
+            math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),
+        )
         self._scale = (  # Mfw I have to keep track of this myself
-            self._scale[0] * math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),  # TODO: Configurable
-            self._scale[1] * math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),
+            self._scale[0] * scale[0],
+            self._scale[1] * scale[1],
         )
-        self.scale(
-            math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),
-            math.exp(event.angleDelta().y() / self.config.SCALE_SENSITIVITY.value),
-        )
-        new_pos = self.mapToScene(position)
+        self.scale(*scale)
+        new_pos = self.mapToScene(event.position().toPoint())
         self.setSceneRect(self.sceneRect().translated(old_pos - new_pos))
 
         self._update()
@@ -441,156 +494,22 @@ class GridRenderer(QGraphicsView):
                 self.mapToScene(QPoint(int(4 + width), self.height() - self.fontMetrics().height())),
             ))
 
-    # ------------------------------ Classes ------------------------------ #
+    # ------------------------------ Utility ------------------------------ #
 
-    class Selection:
-        """
-        A selection made by the user to query the state of chunks.
-        """
+    def _new_task(self) -> None:
+        new_task_dialog = NewTaskDialog(self, self._dimension)
+        new_task_dialog.show()
 
-        @property
-        def mode(self) -> "GridRenderer.Selection.Mode":
-            return self._mode
+    def _set_dimension(self, dimension: Dimension) -> None:
+        self.dimension = dimension
 
-        @mode.setter
-        def mode(self, value: "GridRenderer.Selection.Mode") -> None:
-            if value != self._mode:
-                self._mode = value
-                self.clear()
+    def _set_selection(self, mode: Selection.Mode) -> None:
+        self.selection_mode = mode
 
-        def __init__(self, parent: "GridRenderer", mode: "GridRenderer.Selection.Mode") -> None:
-            self._parent = parent
-            self._mode = mode
-
-            self._positions: Dict[Tuple[int, int], QGraphicsRectItem] = {}
-            self._selection_pen = QPen(QColor(*self._parent.config.SELECTION_COLOUR.value))
-            self._selection_pen.setWidth(4)
-            self._selection_pen.setCosmetic(True)
-
-            self._new_selection = True
-
-        def update(self, old_x: int, old_z: int, new_x: int, new_z: int) -> None:
-            """
-            Updates the selection given the old and new mouse positions.
-
-            :param old_x: The old mouse X position (in terms of chunks).
-            :param old_z: The old mouse Z position (in terms of chunks).
-            :param new_x: The new mouse X position (in terms of chunks).
-            :param new_z: The new mouse Z position (in terms of chunks).
-            """
-
-            if self._mode == GridRenderer.Selection.Mode.LINE:
-                for point in bresenham.bresenham(old_x, old_z, new_x, new_z):
-                    if not point in self._positions:
-                        rect = QGraphicsRectItem(point[0] * 16, point[1] * 16, 16, 16)
-                        rect.setPen(self._selection_pen)
-                        rect.setZValue(8)
-                        self._parent._scene.addItem(rect)
-                        self._positions[point] = rect
-
-            elif self._mode == GridRenderer.Selection.Mode.BOX:
-                if self._new_selection:
-                    self.clear()
-
-                if not self._positions:
-                    rect = QGraphicsRectItem(old_x * 16, old_z * 16, 16, 16)
-                    rect.setPen(self._selection_pen)
-                    rect.setZValue(8)
-                    self._parent._scene.addItem(rect)
-                    self._positions[old_x, old_z] = rect
-
-                (origin_x, origin_z), rect = list(self._positions.items())[0]
-                rect = rect.rect()  # Bruh
-                rect.setBottomRight(QPointF(max(origin_x, new_x + 1) * 16, max(origin_z, new_z + 1) * 16))
-                rect.setTopLeft(QPointF(min(origin_x, new_x) * 16, min(origin_z, new_z) * 16))
-                self._positions[origin_x, origin_z].setRect(rect)
-
-            self._new_selection = False
-
-        def release(self) -> None:
-            """
-            Called when the mouse is released.
-            """
-
-            if self.mode == GridRenderer.Selection.Mode.BOX:
-                self._new_selection = True
-
-        def clear(self) -> None:
-            """
-            Clears the current selection.
-            """
-
-            for position in self._positions.values():
-                self._parent._scene.removeItem(position)
-            self._positions.clear()
-
-        class Mode(Enum):
-            """
-            The current selection mode, chosen by the user.
-            """
-
-            NONE = 0
-            LINE = 1
-            BOX = 2
-
-    class PlayerItem(QGraphicsItem):
-        """
-        A player that we know about.
-        """
-
-        def __init__(self, parent: "GridRenderer", player: Player) -> None:
-            super().__init__(None)
-
-            self.yescom = YesCom.getInstance()
-            self.main_window = MainWindow.INSTANCE
-
-            self.setAcceptHoverEvents(True)
-            # self.setFlags(QGraphicsItem.ItemIgnoresTransformations | QGraphicsItem.ItemIsSelectable)
-
-            self._parent = parent
-            self._player = player
-
-            self.main_window.player_login.connect(self._on_player_login)
-            self.main_window.player_logout.connect(self._on_player_logout)
-
-            self.main_window.player_position_update.connect(self._on_player_position_update)
-            self.main_window.player_health_update.connect(self._on_player_health_update)
-
-        def boundingRect(self) -> QRectF:
-            return QRectF(-16, -16, 32, 32)
-
-        def paint(self, painter: QPainter, option: QStyleOptionGraphicsItem, widget: QWidget = None) -> None:
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            if self._player.isConnected():
-                painter.setBrush(QBrush(QColor(0, 255, 0)))
-            else:
-                painter.setBrush(QBrush(QColor(255, 0, 0)))
-
-            painter.drawEllipse(0, 0, 64, 64)
-
-        # ------------------------------ Events ------------------------------ #
-
-        def hoverEnterEvent(self, event: QGraphicsSceneHoverEvent) -> None:
-            ...  # self.main_window.grid_view_tab.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent) -> None:
-            ...  # self.main_window.grid_view_tab.unsetCursor()
-
-        def _on_player_login(self, player: Player) -> None:
-            if player == self._player:
-                self._connected = True
-
-        def _on_player_logout(self, player_logout: Emitters.PlayerLogout) -> None:
-            if player_logout.player == self._player:
-                self._connected = False
-
-        def _on_player_position_update(self, player: Player) -> None:
-            if player == self._player:
-                self.setPos(player.getPosition().getX(), player.getPosition().getZ())
-                self._dimension = player.getDimension()
-
-        def _on_player_health_update(self, player: Player) -> None:
-            ...
+    def _toggle_render(self, name: str) -> None:
+        if hasattr(self, name):
+            setattr(self, name, not getattr(self, name))
+            self._update()
 
 
-from ..main import MainWindow
+from ...main import MainWindow
