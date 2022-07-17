@@ -56,6 +56,7 @@ import ez.pogdog.yescom.core.util.MinecraftChat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.logging.Logger;
 
 /**
@@ -92,7 +93,7 @@ public class Player implements IConfig, ITickable {
 
     /* ------------------------------ Other fields ------------------------------ */
 
-    public final List<IPacketListener> packetListeners = new ArrayList<>();
+    public final List<IPacketListener> packetListeners = new CopyOnWriteArrayList<>();
 
     public final Server server;
     public final IAccount account;
@@ -231,7 +232,6 @@ public class Player implements IConfig, ITickable {
      * Connects this player to the server, if they are not connected already.
      */
     public void connect() {
-        // TODO: Limit to one connection attempt at a time
         if (!isConnected() && !connecting && server.hasPlayer(this)) {
             connecting = true;
             lastLoginTime = System.currentTimeMillis();
@@ -479,9 +479,7 @@ public class Player implements IConfig, ITickable {
     private class PlayerSessionAdapter extends SessionAdapter {
         @Override
         public void packetReceived(PacketReceivedEvent event) {
-            synchronized (packetListeners) {
-                for (IPacketListener listener : packetListeners) listener.packetIn(event.getPacket());
-            }
+            for (IPacketListener listener : packetListeners) listener.packetIn(event.getPacket());
 
             // Paper has async chat
             if (!(event.getPacket() instanceof ServerChatPacket)) {
@@ -649,8 +647,7 @@ public class Player implements IConfig, ITickable {
 
         @Override
         public void packetSent(PacketSentEvent event) {
-            // FIXME: Optimise
-            for (IPacketListener listener : new ArrayList<>(packetListeners)) listener.packetOut(event.getPacket());
+            for (IPacketListener listener : packetListeners) listener.packetOut(event.getPacket());
         }
 
         @Override

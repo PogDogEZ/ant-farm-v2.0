@@ -111,7 +111,7 @@ public class Server implements IConfig, ITickable {
 
     /* ------------------------------ Other fields ------------------------------ */
 
-    public final List<IQueryHandle<?>> handles = new ArrayList<>(); // TODO: More specific for loaded queries
+    public final List<IQueryHandle<?>> handles = new ArrayList<>();
     public final IServerBehaviour behaviour;
 
     public final ServerSessionAdapter adapter = new ServerSessionAdapter();

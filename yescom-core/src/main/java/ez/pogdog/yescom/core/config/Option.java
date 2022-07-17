@@ -13,18 +13,20 @@ public class Option<T> {
 
     public final String name;
     public final String description;
+    public final T defaultValue;
 
     public T value;
 
-    public Option(String name, String description, T value) {
+    public Option(String name, String description, T defaultValue) {
         this.name = name;
         this.description = description;
+        this.defaultValue = defaultValue;
 
-        this.value = value;
+        this.value = defaultValue;
     }
 
-    public Option(String name, T value) {
-        this(name, "<no description>", value);
+    public Option(String name, T defaultValue) {
+        this(name, "<no description>", defaultValue);
     }
 
     /**

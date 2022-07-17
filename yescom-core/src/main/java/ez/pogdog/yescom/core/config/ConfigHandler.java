@@ -44,11 +44,10 @@ public class ConfigHandler implements ITickable {
         if (System.currentTimeMillis() - lastAutoSaveTime > 120000) {
             // new Thread(() -> {
             try {
-                saveConfiguration(); // Honestly don't think this is slow enough to warrant a separate thread
+                saveConfiguration();
             } catch (IOException error) {
                 logger.warning(String.format("Couldn't save configuration: %s.", error.getMessage()));
                 logger.throwing(getClass().getSimpleName(), "run", error);
-                return; // Don't spam console
             }
             // }).start();
             lastAutoSaveTime = System.currentTimeMillis();
@@ -120,8 +119,10 @@ public class ConfigHandler implements ITickable {
                 this.values.put(configuration.getFullIdentifier(), values);
             }
 
-            logger.finer(String.format("Saved %d option(s) from %d configuration(s) in %dms.", options,
-                    configurations.size(), System.currentTimeMillis() - start));
+            logger.finer(String.format(
+                    "Saved %d option(s) from %d configuration(s) in %dms.",
+                    options, configurations.size(), System.currentTimeMillis() - start
+            ));
         }
     }
 
@@ -139,7 +140,10 @@ public class ConfigHandler implements ITickable {
             Map<String, Object> values = this.values.get(configuration.getFullIdentifier());
             if (values != null) {
                 logger.finer(String.format("Populating %d value(s) for configuration %s.", values.size(), configuration.getFullIdentifier()));
-                for (Option option : configuration.getOptions(true)) option.value = values.get(option.name);
+                for (Option option : configuration.getOptions(true)) {
+                    option.value = values.get(option.name);
+                    if (option.value == null) option.value = option.defaultValue;
+                }
                 values.clear();
             } else {
                 values = new HashMap<>();

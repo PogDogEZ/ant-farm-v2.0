@@ -100,9 +100,7 @@ public class PlayerHandle implements ITickable, Player.IPacketListener {
         this.handle = handle;
         this.player = player;
 
-        synchronized (player.packetListeners) {
-            player.packetListeners.add(this);
-        }
+        player.packetListeners.add(this);
     }
 
     @Override
@@ -165,9 +163,7 @@ public class PlayerHandle implements ITickable, Player.IPacketListener {
         logger.fine(String.format("%s logout for invalid move handle (dimension %s).", player.getUsername(), handle.getDimension()));
 
         handle.available.remove(player);
-        synchronized (player.packetListeners) {
-            player.packetListeners.remove(this);
-        }
+        player.packetListeners.remove(this);
     }
 
     /* ------------------------------ Storages ------------------------------ */
