@@ -1,3 +1,13 @@
+# Disclaimer
+This is not actively maintained and will not be worked on again because:
+1. Most of us (PogDog) don't play Minecraft anymore.
+2. Constantiam updated to 1.19 (it is now patched).
+
+This version was far from complete and was a rework of the original project: https://github.com/PogDogEZ/abrahack-rewrite/.  
+The *original* original project, if you're curious, was: https://youtu.be/Alrt8w5j-WQ.  
+
+The original README follows:
+
 # Ant Farm v2.0
 
 Welcome to **Ant Farm v2.0**, a sequel to the critically acclaimed **Ant Farm v1.0**.  
